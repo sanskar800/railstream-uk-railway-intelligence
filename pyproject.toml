@@ -1,0 +1,25 @@
+[project]
+name = "railstream"
+version = "0.1.0"
+description = "Real-time GB rail performance lakehouse: Network Rail TRUST feed -> Kafka -> Spark -> Iceberg -> dbt"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = []
+
+[tool.uv]
+# An application of several services (ingest, serving, ...), not a library to publish:
+# no build backend; modules are run with `python -m` from the repo root.
+package = false
+
+[dependency-groups]
+dev = [
+    "ruff>=0.17.3",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+# E/W pycodestyle, F pyflakes, I import order, B bugbear, UP pyupgrade, SIM simplifications
+select = ["E", "W", "F", "I", "B", "UP", "SIM"]
