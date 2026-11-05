@@ -1,0 +1,19 @@
+# Always-on capture host (an Oracle Cloud Always Free VM; see docs/development.md).
+# Run from the repo root: docker compose -f infra/capture/compose.yaml up -d --build
+name: railstream-capture
+
+services:
+  stomp-bridge:
+    build:
+      context: ../..
+      dockerfile: infra/capture/Dockerfile
+    restart: unless-stopped  # survives crashes and VM reboots
+    env_file: ../../.env     # NR_USERNAME / NR_PASSWORD; never baked into the image
+    volumes:
+      - ../../data/raw:/data/raw
+    mem_limit: 256m          # the VM has 1 GB; the bridge needs a small fraction
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m        # keep logs from filling the small disk
+        max-file: "3"
