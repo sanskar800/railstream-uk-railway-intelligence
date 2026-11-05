@@ -58,7 +58,14 @@ curl -L -u "$NR_USERNAME:$NR_PASSWORD" -o data/reference/CORPUSExtract.json.gz \
 
 The endpoint redirects to a pre-signed S3 URL; the file is gzipped JSON with one key, `TIPLOCDATA` (findings F3). `data/` is git-ignored.
 
-## 3. Python project
+## 3. Rail Data Marketplace account (validation data only)
+
+- Why: the official **historic delay attribution** data, used once to sanity-check the gold delay models. It is not used by the running pipeline.
+- Register: https://raildata.org.uk (separate, free account; the Network Rail feeds login does not work there).
+- Dataset: search "NWR Historic Delay Attribution", subscribe (Open Government Licence), then download yearly `.zip` files from its "data files" tab by hand into `data/reference/delay_attribution/` (git-ignored).
+- No credentials in `.env`: the dataset is a manual file download, not an API, so the code never logs in.
+
+## 4. Python project
 
 - `make setup`: install from `uv.lock`.
 - `make lint` / `make format`: ruff.

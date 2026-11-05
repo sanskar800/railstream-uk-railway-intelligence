@@ -16,7 +16,7 @@ For the 754 movements in F1, receive time minus `actual_timestamp`: **min −219
 
 - Consequence: processing must use event time with a watermark and a documented policy for events beyond it. The watermark will be chosen from the lateness distribution of a full day, not from this minute.
 - The negative values need explaining before the "no future timestamps" quality check is written (candidates: manual entries, 47 of the 754 were `event_source = MANUAL`; minute-rounded timestamps; local clock).
-- Open: in November UK time equals UTC, so this sample cannot show whether TRUST timestamps are UTC or UK local time. To be confirmed from the documentation and tested for the BST changeover.
+- Resolved from the documentation (2026-11-05, data-sources.md): during BST the event timestamps are one hour in the future (UK local wall-clock encoded as UTC); in November they equal UTC, which is why this sample looked correct. TRUST also rounds to whole minutes, which explains small negative lags but not −219 s.
 - Evidence: as F1.
 
 ## F3. CORPUS joins cleanly on STANOX but is not unique on it (2026-11-03)
@@ -26,3 +26,10 @@ For the 754 movements in F1, receive time minus `actual_timestamp`: **min −219
 - Consequence: a naive join on STANOX would duplicate movement events. Enrichment needs a deterministic choice of one row per STANOX and a test that the join preserves row count.
 - Locations include junctions and freight points without a 3-letter code (e.g. Copyhold Junction); these matter for delay hotspots.
 - Evidence: CORPUS is re-downloadable (development.md §2); not committed.
+
+## F4. Official delay attribution is published about 3 months late, per railway period (2026-11-05)
+
+The Rail Data Marketplace "NWR Historic Delay Attribution" product publishes one zip per railway period (13 four-week periods per financial year), named like `Transparency 26-27 P05 20261105.zip`. On 2026-11-05 the newest data was **2026/27 period 5** (summer 2026), published 2026-11-05. Periods are re-issued with corrections (P05 on 2026-10-07 and 2026-11-05; P02 three times). Files are ~19–22 MB each.
+
+- Consequence: attribution for our capture dates (from 2026-11-03, around period 8) will not exist before roughly February 2027, so a like-for-like validation of the gold delay models is impossible within the build. Day 10 can only do a labelled pattern check against the newest period; always use the newest issue of a period.
+- Evidence: the product's "View files" listing as seen on 2026-11-05 (no files downloaded).
