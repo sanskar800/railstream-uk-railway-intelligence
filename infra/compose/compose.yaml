@@ -1,0 +1,133 @@
+# RailStream local stack. Run through the Makefile (make up / make down / make ps).
+# Profiles: core services have none (always started); `tools` = Redpanda Console.
+# All ports bind to 127.0.0.1. Credentials are local-development defaults, overridable in .env.
+name: railstream
+
+x-lakekeeper-env: &lakekeeper-env
+  LAKEKEEPER__PG_DATABASE_URL_READ: postgresql://lakekeeper:${LAKEKEEPER_DB_PASSWORD:-lakekeeper-local}@postgres:5432/lakekeeper
+  LAKEKEEPER__PG_DATABASE_URL_WRITE: postgresql://lakekeeper:${LAKEKEEPER_DB_PASSWORD:-lakekeeper-local}@postgres:5432/lakekeeper
+  # Encrypts storage credentials held in the catalog database.
+  LAKEKEEPER__PG_ENCRYPTION_KEY: ${LAKEKEEPER_ENCRYPTION_KEY:-local-dev-only-not-secret}
+  RUST_LOG: info
+
+services:
+  # Kafka API + Schema Registry (ADR-001). Internal listener for containers, external for the laptop.
+  redpanda:
+    image: redpandadata/redpanda:v26.1.20
+    command:
+      - redpanda
+      - start
+      - --mode=dev-container
+      - --smp=1
+      - --memory=1G
+      - --kafka-addr=internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr=internal://redpanda:9092,external://localhost:19092
+      - --schema-registry-addr=internal://0.0.0.0:8081,external://0.0.0.0:18081
+    ports:
+      - 127.0.0.1:19092:19092   # Kafka
+      - 127.0.0.1:18081:18081   # Schema Registry
+    volumes:
+      - redpanda-data:/var/lib/redpanda/data
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health | grep -E 'Healthy:.+true'"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    mem_limit: 1280m
+
+  # S3-compatible object storage for Iceberg files (replaces MinIO: architecture.md §6).
+  seaweedfs:
+    image: chrislusf/seaweedfs:4.52
+    entrypoint: ["/bin/sh", "/init/seaweedfs-start.sh"]
+    environment:
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-railstream}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-railstream-local-secret}
+    ports:
+      - 127.0.0.1:8333:8333     # S3 API
+    volumes:
+      - seaweedfs-data:/data
+      - ./init:/init:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:9333/cluster/status && wget -q -O /dev/null http://127.0.0.1:8333/healthz"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    mem_limit: 512m
+
+  # Shared Postgres: Lakekeeper's catalog database now; Airflow's metadata database later.
+  postgres:
+    image: postgres:18.6-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres-local}
+      LAKEKEEPER_DB_PASSWORD: ${LAKEKEEPER_DB_PASSWORD:-lakekeeper-local}
+    ports:
+      - 127.0.0.1:5434:5432     # 5432/5433 are taken by other local databases
+    volumes:
+      - postgres-data:/var/lib/postgresql
+      - ./postgres/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    mem_limit: 256m
+
+  # Iceberg REST catalog (ADR-003): schema migration first, then the server.
+  lakekeeper-migrate:
+    image: quay.io/lakekeeper/catalog:v0.14.2
+    command: ["migrate"]
+    environment: *lakekeeper-env
+    depends_on:
+      postgres: {condition: service_healthy}
+    restart: "no"
+
+  lakekeeper:
+    image: quay.io/lakekeeper/catalog:v0.14.2
+    command: ["serve"]
+    environment: *lakekeeper-env
+    ports:
+      - 127.0.0.1:8181:8181     # Iceberg REST + management API
+    depends_on:
+      lakekeeper-migrate: {condition: service_completed_successfully}
+    healthcheck:
+      test: ["CMD", "/home/nonroot/lakekeeper", "healthcheck"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    mem_limit: 256m
+
+  # One-shot, idempotent: bucket, catalog bootstrap, warehouse. Reuses the SeaweedFS image (sh, wget, weed).
+  # In the `init` profile so `up --wait` ignores it; `make up` runs it explicitly after the services are healthy.
+  lakehouse-init:
+    image: chrislusf/seaweedfs:4.52
+    profiles: ["init"]
+    entrypoint: ["/bin/sh", "/init/lakehouse-init.sh"]
+    environment:
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-railstream}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-railstream-local-secret}
+    volumes:
+      - ./init:/init:ro
+    depends_on:
+      seaweedfs: {condition: service_healthy}
+      lakekeeper: {condition: service_healthy}
+    restart: "no"
+
+  # Web UI for topics, messages, schemas and consumer lag (task 1.5). On demand: make tools.
+  console:
+    image: redpandadata/console:v3.13.1
+    profiles: ["tools"]
+    environment:
+      KAFKA_BROKERS: redpanda:9092
+      SCHEMAREGISTRY_ENABLED: "true"
+      SCHEMAREGISTRY_URLS: http://redpanda:8081
+    ports:
+      - 127.0.0.1:8085:8080
+    depends_on:
+      redpanda: {condition: service_healthy}
+    mem_limit: 256m
+
+volumes:
+  redpanda-data:
+  seaweedfs-data:
+  postgres-data:

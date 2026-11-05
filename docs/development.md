@@ -94,7 +94,27 @@ For development only, and **only while the VM bridge is stopped**: writes to `da
 - Dataset: search "NWR Historic Delay Attribution", subscribe (Open Government Licence), then download yearly `.zip` files from its "data files" tab by hand into `data/reference/delay_attribution/` (git-ignored).
 - No credentials in `.env`: the dataset is a manual file download, not an API, so the code never logs in.
 
-## 4. Python project
+## 4. Local stack (`make up`)
+
+`infra/compose/compose.yaml`, run through the Makefile. All ports bind to `127.0.0.1`; credentials are local-only defaults, overridable in `.env` (see `.env.example`).
+
+| Service | Image (checked 2026-11-05) | Host port | Role |
+|---|---|---|---|
+| Redpanda | `redpandadata/redpanda:v26.1.20` | 19092 (Kafka), 18081 (Schema Registry) | ADR-001 |
+| SeaweedFS | `chrislusf/seaweedfs:4.52` | 8333 (S3 API) | Object storage for Iceberg (replaces MinIO, findings F7) |
+| Postgres | `postgres:18.6-alpine` | 5434 | Lakekeeper catalog database (Airflow later) |
+| Lakekeeper | `quay.io/lakekeeper/catalog:v0.14.2` | 8181 | Iceberg REST catalog, ADR-003 |
+| Redpanda Console (`make tools`) | `redpandadata/console:v3.13.1` | 8085 | Web UI: topics, messages, schemas, lag |
+
+- `make up` starts the services, waits until healthy, then runs `lakehouse-init` (idempotent): creates the `warehouse` bucket, bootstraps Lakekeeper and creates the `railstream` warehouse (Lakekeeper validates storage by writing a test object). Safe to run repeatedly.
+- `make tools` (Console), `make ps`, `make logs`, `make stats`, `make down` (keeps data volumes).
+- Remote signing: clients do not need S3 keys; Lakekeeper signs storage requests for them.
+- **Open (Day 5/9):** Lakekeeper tells clients the storage endpoint is `http://seaweedfs:8333`, which resolves only inside the Docker network. Clients inside the network (Spark) are fine; clients on the laptop (DuckDB, dbt, the API) need either to run in the network or an endpoint name that resolves on both sides.
+- Ports 5432/5433 (other local databases), 8000/8010/3000/3001/8080/8081 (other projects, Relay) are avoided.
+
+**Memory baseline (2026-11-05, idle, no data):** Redpanda 177.5 MiB, Postgres 116.3 MiB, SeaweedFS 46.6 MiB, Console 40.9 MiB, Lakekeeper 31.0 MiB: **≈ 412 MiB** of ~7.6 GiB. Images ≈ 2.5 GB on disk. Re-measured with data flowing and with Spark (Day 5).
+
+## 5. Python project
 
 - `make setup`: install from `uv.lock`.
 - `make lint` / `make format`: ruff.
