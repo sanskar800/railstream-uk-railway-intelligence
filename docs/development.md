@@ -58,6 +58,15 @@ curl -L -u "$NR_USERNAME:$NR_PASSWORD" -o data/reference/CORPUSExtract.json.gz \
 
 The endpoint redirects to a pre-signed S3 URL; the file is gzipped JSON with one key, `TIPLOCDATA` (findings F3). `data/` is git-ignored.
 
+### Capturing the live feed (`make capture`)
+
+`make capture` runs the STOMP bridge (`ingest/stomp_bridge`): a durable subscription to `TRAIN_MVT_ALL_TOC` that writes every frame to `data/raw/trust/date=YYYY-MM-DD/hour=HH.jsonl` (UTC hours; completed hours are compressed to `.jsonl.gz`) and acknowledges it only after it is on disk. Stop with Ctrl+C; a restart within 5 minutes loses nothing (findings F5).
+
+- Run it in its **own terminal** and leave it running. Only one copy at a time: the durable subscription is tied to the `client-id` (your email), and the broker rejects a second connection with the same id.
+- **Keep the laptop awake on mains power** (Windows: Settings → System → Power → "When plugged in, put my device to sleep after: Never"). Messages expire on the broker after 5 minutes, so sleeping longer than that creates a data gap; the bridge logs it as `DATA GAP` on reconnect.
+- Every 60 s it logs `frames=… messages=… bytes=… last_frame_age_s=…`; a growing `last_frame_age_s` means the feed has gone quiet.
+- Disk: check `du -sh data/raw` now and then; growth per day is measured from the capture, not estimated.
+
 ## 3. Rail Data Marketplace account (validation data only)
 
 - Why: the official **historic delay attribution** data, used once to sanity-check the gold delay models. It is not used by the running pipeline.

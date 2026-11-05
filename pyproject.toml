@@ -4,7 +4,10 @@ version = "0.1.0"
 description = "Real-time GB rail performance lakehouse: Network Rail TRUST feed -> Kafka -> Spark -> Iceberg -> dbt"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
-dependencies = []
+dependencies = [
+    "pydantic-settings>=2.16.2",
+    "stomp-py>=9.0.0",
+]
 
 [tool.uv]
 # An application of several services (ingest, serving, ...), not a library to publish:
@@ -13,6 +16,7 @@ package = false
 
 [dependency-groups]
 dev = [
+    "pytest>=9.2.0",
     "ruff>=0.17.3",
 ]
 
@@ -23,3 +27,8 @@ target-version = "py312"
 [tool.ruff.lint]
 # E/W pycodestyle, F pyflakes, I import order, B bugbear, UP pyupgrade, SIM simplifications
 select = ["E", "W", "F", "I", "B", "UP", "SIM"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-ra --strict-markers"

@@ -33,3 +33,11 @@ The Rail Data Marketplace "NWR Historic Delay Attribution" product publishes one
 
 - Consequence: attribution for our capture dates (from 2026-11-03, around period 8) will not exist before roughly February 2027, so a like-for-like validation of the gold delay models is impossible within the build. Day 10 can only do a labelled pattern check against the newest period; always use the newest issue of a period.
 - Evidence: the product's "View files" listing as seen on 2026-11-05 (no files downloaded).
+
+## F5. The durable subscription redelivers what was missed during a restart (2026-11-05)
+
+The bridge was stopped at 13:26:06 UTC and restarted at 13:26:30 (24 s offline). On resubscribing, the first frames arrived in a burst at 13:26:30 carrying messages queued from 13:26:06 onwards, oldest first (25 s, 23 s, 21 s, 18 s, 15 s, 13 s old). The restart appended to the same hour file (56 frames in total).
+
+- Consequence: short restarts (under the broker's 5-minute message expiry) lose nothing, so the bridge can be restarted for deploys. They also produce a burst of "late" events at reconnect, which freshness metrics and the watermark must tolerate.
+- Not yet tested: a disconnection longer than 5 minutes (expected: data gap, logged by the bridge).
+- Evidence: `results/dev/2026-11-05-durable-restart/hour=13.jsonl.gz` (compare `received_at` with each message's `msg_queue_timestamp`).
