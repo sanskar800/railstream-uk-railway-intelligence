@@ -58,14 +58,34 @@ curl -L -u "$NR_USERNAME:$NR_PASSWORD" -o data/reference/CORPUSExtract.json.gz \
 
 The endpoint redirects to a pre-signed S3 URL; the file is gzipped JSON with one key, `TIPLOCDATA` (findings F3). `data/` is git-ignored.
 
-### Capturing the live feed (`make capture`)
+### Capturing the live feed
 
-`make capture` runs the STOMP bridge (`ingest/stomp_bridge`): a durable subscription to `TRAIN_MVT_ALL_TOC` that writes every frame to `data/raw/trust/date=YYYY-MM-DD/hour=HH.jsonl` (UTC hours; completed hours are compressed to `.jsonl.gz`) and acknowledges it only after it is on disk. Stop with Ctrl+C; a restart within 5 minutes loses nothing (findings F5).
+The STOMP bridge (`ingest/stomp_bridge`) holds a durable subscription to `TRAIN_MVT_ALL_TOC`, writes every frame to `<out>/date=YYYY-MM-DD/hour=HH.jsonl` (UTC hours; completed hours are compressed to `.jsonl.gz`) and acknowledges it only after it is on disk. A restart within 5 minutes loses nothing (findings F5).
 
-- Run it in its **own terminal** and leave it running. Only one copy at a time: the durable subscription is tied to the `client-id` (your email), and the broker rejects a second connection with the same id.
-- **Keep the laptop awake on mains power** (Windows: Settings → System → Power → "When plugged in, put my device to sleep after: Never"). Messages expire on the broker after 5 minutes, so sleeping longer than that creates a data gap; the bridge logs it as `DATA GAP` on reconnect.
-- Every 60 s it logs `frames=… messages=… bytes=… last_frame_age_s=…`; a growing `last_frame_age_s` means the feed has gone quiet.
-- Disk: check `du -sh data/raw` now and then; growth per day is measured from the capture, not estimated.
+**Exactly one bridge may run at a time.** A second bridge with the same `client-id` is not rejected: the broker splits the messages between them, so each archive silently holds about half (findings F6).
+
+#### Always-on capture VM (the canonical archive)
+
+The feed is captured 24/7 on an Oracle Cloud **Always Free** VM (`VM.Standard.E2.1.Micro`, Ubuntu 24.04, London; created 2026-11-05) because a laptop cannot run around the clock. Only Always Free resources are used: £0 during and after the trial.
+
+| What | Where |
+|---|---|
+| Host | `CAPTURE_HOST` in `.env` (`ubuntu@<public-ip>`); SSH key `~/.ssh/railstream_oci` (key login only) |
+| Setup (one-off, idempotent) | `scp infra/capture/setup-vm.sh` to the VM and run `bash setup-vm.sh`: 2 GB swap, security updates, Docker, clone of this repo |
+| Credentials | `~/railstream/.env` on the VM, only the `NR_` lines, mode 600 |
+| Run | `cd ~/railstream && docker compose -f infra/capture/compose.yaml up -d --build` (`restart: unless-stopped`, 256 MB memory cap, logs capped at 30 MB) |
+| Logs | `docker compose -f infra/capture/compose.yaml logs -f` (per-minute `frames=… messages=…`; ~28 frames/min at peak) |
+| Update code | `git pull` then the run command again |
+| Get the data | on the laptop: `make pull-raw` copies completed hours into `data/raw/trust/` (never the open hour) |
+
+Networking notes from setup: the instance needed the "Connect public subnet to internet" quick action (internet gateway + route) and an **ephemeral public IP** added under VNIC → IP administration; neither was created by the instance wizard after the shape was changed.
+
+#### Local capture (`make capture`)
+
+For development only, and **only while the VM bridge is stopped**: writes to `data/raw/trust-local/` so it can never collide with the VM archive in `data/raw/trust/`. Stop with Ctrl+C.
+
+- Every 60 s the bridge logs `frames=… messages=… bytes=… last_frame_age_s=…`. A growing `last_frame_age_s` means the feed went quiet; a sudden halving of `frames` means a second bridge is connected (F6).
+- Disk: check `du -sh data/raw` on the VM now and then; daily growth is measured from the capture, not estimated.
 
 ## 3. Rail Data Marketplace account (validation data only)
 

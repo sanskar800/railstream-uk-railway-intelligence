@@ -12,8 +12,8 @@ setup:  ## Create .venv and install exact versions from uv.lock
 test:  ## Run unit tests (no network or Docker needed)
 	uv run pytest
 
-capture:  ## Capture the live TRUST feed locally to data/raw/trust (Ctrl+C to stop)
-	uv run python -m ingest.stomp_bridge
+capture:  ## Capture locally to data/raw/trust-local (not while the VM capture runs; Ctrl+C to stop)
+	uv run python -m ingest.stomp_bridge --out data/raw/trust-local
 
 pull-raw:  ## Copy completed hour files from the capture VM (CAPTURE_HOST in .env)
 	uv run python scripts/pull_raw.py
