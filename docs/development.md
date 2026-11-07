@@ -89,6 +89,18 @@ Feeds the local pipeline. It uses **its own durable subscription** (`railstream-
 - Stop with Ctrl+C (outstanding Kafka deliveries are flushed). When the laptop is off, the broker keeps the subscription's messages for 5 minutes only; longer gaps are covered by the VM archive.
 - Disk on the VM: check `du -sh data/raw` now and then; daily growth is measured from the capture, not estimated.
 
+#### Replay (`make replay`)
+
+Re-publishes captured frames to `raw.trust.movement` through the same producer as the live bridge, with the original receive time in the `received_at` header and `source=replay`. Reads `data/raw/trust/` (the VM archive; run `make pull-raw` first) unless `--root` says otherwise.
+
+| Use | Command |
+|---|---|
+| Development: a day at 10× (2.4 h), with real bursts and quiet periods | `make replay DAY=2026-11-06` |
+| Backfill after the laptop was off (no waiting; measured ~40k messages/s, so a day takes ~20 s) | `make replay DAY=2026-11-06 SPEED=0` |
+| Refill a window the live bridge logged as `NOT IN KAFKA` | `make replay FROM=2026-11-07T15:00 TO=2026-11-07T15:05 SPEED=0` |
+
+Times are UTC (a timestamp without an offset is read as UTC). Replaying a window that is already in Kafka publishes it again; silver dedupes. Measured 2026-11-07: the 08:00 UTC peak hour of 2026-11-06 (52,386 messages) in 1.3 s at full speed; 5 minutes at 10× in 29.97 s (expected 29.8 s).
+
 ## 3. Rail Data Marketplace account (validation data only)
 
 - Why: the official **historic delay attribution** data, used once to sanity-check the gold delay models. It is not used by the running pipeline.

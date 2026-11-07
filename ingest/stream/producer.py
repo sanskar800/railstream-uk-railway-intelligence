@@ -67,25 +67,34 @@ class TrustProducer:
 
         return cls(Producer(producer_config(bootstrap, f"railstream-{source}")), source)
 
-    def send(self, received_at: datetime, messages: list[dict]) -> int:
-        """Queue the messages of one frame; never blocks on the broker. Returns records queued."""
+    def send(self, received_at: datetime, messages: list[dict], block: bool = False) -> int:
+        """Queue the messages of one frame and return how many were queued.
+
+        block=False (live bridge): never waits; a full local queue counts as failed (the frame is
+        on disk and replayable). block=True (replay): waits for room instead, so nothing is lost.
+        """
         headers = [
             ("received_at", received_at.isoformat().encode()),
             ("source", self.source.encode()),
         ]
         queued = 0
         for key, value in to_records(messages):
-            try:
-                self.producer.produce(
-                    self.topic,
-                    value=value,
-                    key=key,
-                    headers=headers,
-                    on_delivery=lambda err, _msg, r=received_at: self._delivered(err, r),
-                )
-                queued += 1
-            except BufferError:  # local queue full: Kafka has been unreachable for a while
-                self._delivered("local producer queue full", received_at)
+            while True:
+                try:
+                    self.producer.produce(
+                        self.topic,
+                        value=value,
+                        key=key,
+                        headers=headers,
+                        on_delivery=lambda err, _msg, r=received_at: self._delivered(err, r),
+                    )
+                    queued += 1
+                    break
+                except BufferError:  # local queue full: producing faster than Kafka accepts
+                    if not block:
+                        self._delivered("local producer queue full", received_at)
+                        break
+                    self.producer.poll(0.5)  # deliveries free up room
         with self.lock:
             self.stats.sent += queued
         self.producer.poll(0)  # serve delivery callbacks of earlier records
