@@ -85,3 +85,12 @@ The test bridge was stopped at 13:46:52 UTC and restarted at 13:53:12 (380 s). O
 
 - Consequence: the 5-minute expiry from the documentation is confirmed by measurement. A first version of the bridge detected gaps only *within* one process, so a long restart (e.g. a VM reboot) would have lost data silently; it now recovers the last capture time from the files on disk at startup.
 - Evidence: `results/dev/2026-11-07-separate-subscription-and-gap/restart-log.txt` and `hour=13.jsonl.gz` (compare `received_at` with `msg_queue_timestamp`).
+
+## F12. A Kafka outage during live capture lost and duplicated nothing (2026-11-07)
+
+The live bridge (own subscription `railstream-live`) ran 15:11:40–15:15:10 UTC publishing to `raw.trust.movement`; Redpanda was stopped at 15:12:39 and started at 15:13:20 (41 s). Capture did not pause (28 frames in the minute of the outage); the producer buffered and delivered after the restart: `sent` 2,558, `delivered` 2,558, `failed` 0. Comparing every message in the disk capture with every Kafka record: **2,558 = 2,558, identical multisets** (no loss, no duplicate), 1,359 trains each in exactly one partition with the same per-train order as on disk; partitions held 821 / 859 / 878 records.
+
+- Consequence: publishing after the ACK keeps Kafka off the broker's critical path (ADR-005), and idempotence absorbs the producer's retries. An outage over the 5-minute delivery timeout would instead log `NOT IN KAFKA` with the window to replay.
+- Also found: about 1 in 20 fresh Kafka connections to `localhost:19092` failed on Windows (`localhost` also resolves to `::1`, where nothing listens); 30/30 succeeded with `127.0.0.1`, which is now both the bootstrap and the advertised address (development.md §4).
+- Evidence: `results/dev/2026-11-07-kafka-outage/` (bridge log with the stop/start times; disk-vs-Kafka comparison output).
+

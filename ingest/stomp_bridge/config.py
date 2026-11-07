@@ -1,5 +1,7 @@
 """Bridge settings, read from environment variables or `.env` (prefix `NR_`)."""
 
+from __future__ import annotations
+
 from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -24,3 +26,12 @@ class BridgeSettings(BaseSettings):
     @property
     def effective_client_id(self) -> str:
         return self.client_id or self.username
+
+    def for_subscription(self, name: str) -> BridgeSettings:
+        """Settings for a separate durable subscription (its own full copy of the feed, F10).
+
+        The client-id gets the same suffix, so it can never collide with the archive bridge's.
+        """
+        return self.model_copy(
+            update={"subscription_name": name, "client_id": f"{self.effective_client_id}-{name}"}
+        )

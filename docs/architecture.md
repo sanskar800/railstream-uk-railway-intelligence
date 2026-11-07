@@ -57,7 +57,7 @@ Details of each layer's schema: metrics.md (definitions) and data-sources.md (in
 | Hop | Guarantee | How |
 |---|---|---|
 | Network Rail → bridge | At least once | Durable subscription; ACK after fsync (5-minute broker expiry: longer outages are gaps) |
-| Bridge → Kafka | At least once | Idempotent producer, acks=all (Day 3) |
+| Bridge → Kafka | At least once | After the ACK, asynchronously (ADR-005); idempotent producer with acks=all, so producer retries add no duplicates; undelivered windows are logged and replayed from disk (F12) |
 | Kafka → Iceberg (Spark) | Exactly once per Kafka offset | Checkpointed offsets + atomic Iceberg commits |
 | End to end | Effectively once per real event | Silver dedupes redeliveries and applies corrections (metrics.md §1) |
 

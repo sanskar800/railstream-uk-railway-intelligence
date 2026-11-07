@@ -1,0 +1,12 @@
+15:12:39 TEST: stopping redpanda
+15:13:20 TEST: starting redpanda
+15:15:10 TEST: bridge exited
+2026-11-07 15:11:40,269 INFO stomp_bridge subscribed to /topic/TRAIN_MVT_ALL_TOC (client-id: <account>-railstream-live, durable: railstream-live)
+2026-11-07 15:12:40,877 INFO stomp_bridge frames=27 messages=754 bytes=548773 unparseable=0 last_frame_age_s=0
+2026-11-07 15:12:40,877 INFO stomp_bridge kafka sent=754 delivered=722 failed=0
+2026-11-07 15:13:40,511 INFO stomp_bridge frames=28 messages=716 bytes=520311 unparseable=0 last_frame_age_s=0
+2026-11-07 15:13:40,511 INFO stomp_bridge kafka sent=716 delivered=748 failed=0
+2026-11-07 15:14:41,093 INFO stomp_bridge frames=29 messages=735 bytes=535690 unparseable=0 last_frame_age_s=1
+2026-11-07 15:14:41,093 INFO stomp_bridge kafka sent=735 delivered=735 failed=0
+2026-11-07 15:15:09,947 INFO stomp_bridge kafka sent=353 delivered=353 failed=0
+2026-11-07 15:15:09,948 INFO stomp_bridge stopped

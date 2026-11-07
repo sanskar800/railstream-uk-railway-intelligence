@@ -1,0 +1,5 @@
+disk messages:  2,558
+kafka records:  2,558  per partition {0: 821, 1: 859, 2: 878}  sources {b'live': 2558}
+same multiset (nothing lost, no duplicates): True
+trains: 1,359; each in exactly one partition: True
+per-train order in kafka == order on disk: True

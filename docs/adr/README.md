@@ -10,6 +10,7 @@ An ADR records **one** significant decision: the context, the options considered
 | [002](002-iceberg-table-format.md) | Apache Iceberg for all lakehouse tables: atomic commits, schema evolution, time travel, compaction | Accepted (2026-11-05) |
 | [003](003-iceberg-catalog.md) | An Iceberg REST catalog (Lakekeeper, on the shared Postgres) used by every engine | Accepted (2026-11-05) |
 | [004](004-dbt-adapter-and-gold-storage.md) | dbt on DuckDB; gold written to Iceberg if a Day 9 spike proves it, otherwise to DuckDB/Parquet | Accepted (2026-11-05) |
+| [005](005-disk-before-kafka.md) | The live bridge writes to disk before acknowledging, then publishes to Kafka asynchronously; in a cloud deployment with replicated Kafka it would acknowledge on Kafka delivery | Accepted (2026-11-07) |
 
 Smaller decisions and accepted deviations from the spec are listed in [architecture.md §6](../architecture.md#6-deviations-from-the-original-specification); what the build revealed is in [findings.md](../findings.md).
 

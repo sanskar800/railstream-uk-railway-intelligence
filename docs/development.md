@@ -80,12 +80,14 @@ The feed is captured 24/7 on an Oracle Cloud **Always Free** VM (`VM.Standard.E2
 
 Networking notes from setup: the instance needed the "Connect public subnet to internet" quick action (internet gateway + route) and an **ephemeral public IP** added under VNIC → IP administration; neither was created by the instance wizard after the shape was changed.
 
-#### Local capture (`make capture`)
+#### Live bridge on the laptop (`make live`)
 
-For development only, and **only while the VM bridge is stopped**: writes to `data/raw/trust-local/` so it can never collide with the VM archive in `data/raw/trust/`. Stop with Ctrl+C.
+Feeds the local pipeline. It uses **its own durable subscription** (`railstream-live`, client-id `<account>-railstream-live`), which receives a full copy of the feed (findings F10), so it runs alongside the VM without splitting the archive. Needs `make up` first.
 
-- Every 60 s the bridge logs `frames=… messages=… bytes=… last_frame_age_s=…`. A growing `last_frame_age_s` means the feed went quiet; a sudden halving of `frames` means a second bridge is connected (F6).
-- Disk: check `du -sh data/raw` on the VM now and then; daily growth is measured from the capture, not estimated.
+- Each frame is written to `data/raw/trust-live/` and acknowledged as on the VM, then its messages are published to Kafka `raw.trust.movement` (one record per TRUST message, key = train id, idempotent producer). Publishing is asynchronous and after the ACK: if Kafka is down, capture continues and the bridge logs `NOT IN KAFKA: frames received <from>–<to>`; that window is refilled from disk with the replay tool.
+- Every 60 s: `frames=… messages=… bytes=… last_frame_age_s=…` (a growing age = quiet feed; a sudden halving of `frames` = a second bridge on the same subscription, F6) and `kafka sent=… delivered=… failed=…`.
+- Stop with Ctrl+C (outstanding Kafka deliveries are flushed). When the laptop is off, the broker keeps the subscription's messages for 5 minutes only; longer gaps are covered by the VM archive.
+- Disk on the VM: check `du -sh data/raw` now and then; daily growth is measured from the capture, not estimated.
 
 ## 3. Rail Data Marketplace account (validation data only)
 
@@ -106,7 +108,8 @@ For development only, and **only while the VM bridge is stopped**: writes to `da
 | Lakekeeper | `quay.io/lakekeeper/catalog:v0.14.2` | 8181 | Iceberg REST catalog, ADR-003 |
 | Redpanda Console (`make tools`) | `redpandadata/console:v3.13.1` | 8085 | Web UI: topics, messages, schemas, lag |
 
-- `make up` starts the services, waits until healthy, then runs `lakehouse-init` (idempotent): creates the `warehouse` bucket, bootstraps Lakekeeper and creates the `railstream` warehouse (Lakekeeper validates storage by writing a test object). Safe to run repeatedly.
+- `make up` starts the services, waits until healthy, then runs `lakehouse-init` (idempotent): creates the `warehouse` bucket, bootstraps Lakekeeper and creates the `railstream` warehouse (Lakekeeper validates storage by writing a test object). Then it creates the Kafka topics declared in `ingest/stream/topics.py` (`make topics`; existing topics are kept). Safe to run repeatedly.
+- Kafka from the laptop: **`127.0.0.1:19092`, not `localhost:19092`**. On Windows `localhost` resolves to IPv6 `::1` as well, where nothing listens, and librdkafka failed about 1 in 20 fresh connections when it tried `::1` first (30/30 succeeded with `127.0.0.1`). Redpanda also advertises `127.0.0.1:19092`, because clients reconnect to the advertised address, not the bootstrap one.
 - `make tools` (Console), `make ps`, `make logs`, `make stats`, `make down` (keeps data volumes).
 - Remote signing: clients do not need S3 keys; Lakekeeper signs storage requests for them.
 - **Open (Day 5/9):** Lakekeeper tells clients the storage endpoint is `http://seaweedfs:8333`, which resolves only inside the Docker network. Clients inside the network (Spark) are fine; clients on the laptop (DuckDB, dbt, the API) need either to run in the network or an endpoint name that resolves on both sides.

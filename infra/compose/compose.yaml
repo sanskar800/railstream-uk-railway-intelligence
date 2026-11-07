@@ -21,7 +21,7 @@ services:
       - --smp=1
       - --memory=1G
       - --kafka-addr=internal://0.0.0.0:9092,external://0.0.0.0:19092
-      - --advertise-kafka-addr=internal://redpanda:9092,external://localhost:19092
+      - --advertise-kafka-addr=internal://redpanda:9092,external://127.0.0.1:19092   # not "localhost": on Windows it may resolve to ::1 first, where nothing listens
       - --schema-registry-addr=internal://0.0.0.0:8081,external://0.0.0.0:18081
     ports:
       - 127.0.0.1:19092:19092   # Kafka

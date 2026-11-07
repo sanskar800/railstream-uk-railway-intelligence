@@ -4,7 +4,7 @@
 # .env is optional for the local stack: every variable it can set has a local default.
 COMPOSE = docker compose $(if $(wildcard .env),--env-file .env,) -f infra/compose/compose.yaml
 
-.PHONY: help setup test lint format capture pull-raw up down ps logs tools stats
+.PHONY: help setup test lint format live topics pull-raw up down ps logs tools stats
 
 help:  ## List targets
 	@uv run python -c "import re; [print(f\"{m[0]:<12} {m[1]}\") for m in re.findall(r\"^([a-z-]+):.*## (.*)$$\", open(\"Makefile\").read(), re.M)]"
@@ -15,8 +15,8 @@ setup:  ## Create .venv and install exact versions from uv.lock
 test:  ## Run unit tests (no network or Docker needed)
 	uv run pytest
 
-capture:  ## Capture locally to data/raw/trust-local (not while the VM capture runs; Ctrl+C to stop)
-	uv run python -m ingest.stomp_bridge --out data/raw/trust-local
+live:  ## Live bridge: own subscription -> data/raw/trust-live + Kafka (needs `make up`; Ctrl+C stops)
+	uv run python -m ingest.stomp_bridge --subscription railstream-live --out data/raw/trust-live --kafka 127.0.0.1:19092
 
 pull-raw:  ## Copy completed hour files from the capture VM (CAPTURE_HOST in .env)
 	uv run python scripts/pull_raw.py
@@ -32,6 +32,10 @@ format:  ## Auto-fix lint issues and format
 up:  ## Start the core stack (Redpanda, SeaweedFS, Postgres, Lakekeeper) and initialise the lakehouse
 	$(COMPOSE) up -d --wait
 	$(COMPOSE) --profile init run --rm lakehouse-init
+	uv run python -m ingest.stream.topics
+
+topics:  ## Create missing Kafka topics (idempotent; also part of `up`)
+	uv run python -m ingest.stream.topics
 
 tools:  ## Also start Redpanda Console on http://localhost:8085
 	$(COMPOSE) --profile tools up -d --wait console

@@ -5,6 +5,10 @@ fsynced it, so a crash can cause a redelivered duplicate (removed later in silve
 loss. The broker keeps unacknowledged and missed messages for 5 minutes only, so a longer
 disconnection is logged as a data gap. A connection that stays up while frames stop arriving is
 logged as a quiet feed.
+
+Optionally (the laptop's live bridge) each frame's messages are then published to Kafka. That
+happens after the ACK and asynchronously, so Kafka being slow or down never blocks capture; records
+Kafka did not take are reported with their time window and refilled from disk by the replay tool.
 """
 
 from __future__ import annotations
@@ -22,6 +26,7 @@ import stomp
 from ingest.stomp_bridge.capture import RawCaptureWriter
 from ingest.stomp_bridge.config import BridgeSettings
 from ingest.stomp_bridge.frames import FrameError, split_frame
+from ingest.stream.producer import TrustProducer
 
 log = logging.getLogger("stomp_bridge")
 
@@ -95,9 +100,10 @@ class Stats:
 class CaptureListener(stomp.ConnectionListener):
     """Called on stomp.py's receiver thread for every frame."""
 
-    def __init__(self, conn, writer: RawCaptureWriter) -> None:
+    def __init__(self, conn, writer: RawCaptureWriter, sink: TrustProducer | None = None) -> None:
         self.conn = conn
         self.writer = writer
+        self.sink = sink
         self.stats = Stats()
         self.lock = threading.Lock()
         self.disconnected = threading.Event()
@@ -109,14 +115,25 @@ class CaptureListener(stomp.ConnectionListener):
         self.writer.write(received_at, dict(frame.headers), frame.body)
         # 2. Then acknowledge. STOMP 1.2 acks by the frame's "ack" header.
         self.conn.ack(frame.headers.get("ack") or frame.headers["message-id"])
+        try:
+            messages = split_frame(frame.body)
+        except FrameError:
+            messages = None  # still captured raw; nothing to publish
         with self.lock:
             self.stats.frames += 1
             self.stats.bytes += len(frame.body.encode("utf-8"))
             self.stats.last_frame_at = received_at
+            if messages is None:
+                self.stats.unparseable += 1
+            else:
+                self.stats.messages += len(messages)
+        # 3. Then publish (optional). The frame is already safe on disk, so a Kafka problem is
+        #    logged, never raised into the receiver thread.
+        if self.sink is not None and messages:
             try:
-                self.stats.messages += len(split_frame(frame.body))
-            except FrameError:
-                self.stats.unparseable += 1  # still captured raw; parsing happens downstream
+                self.sink.send(received_at, messages)
+            except Exception:
+                log.exception("publishing to Kafka failed; the frame is on disk")
 
     def on_error(self, frame) -> None:
         log.error("broker error: %s", frame.body.strip()[:500])
@@ -135,10 +152,10 @@ class CaptureListener(stomp.ConnectionListener):
         return stats
 
 
-def _connect(settings: BridgeSettings, writer: RawCaptureWriter):
+def _connect(settings: BridgeSettings, writer: RawCaptureWriter, sink: TrustProducer | None):
     hb = settings.heartbeat_ms
     conn = stomp.Connection12([(settings.stomp_host, settings.stomp_port)], heartbeats=(hb, hb))
-    listener = CaptureListener(conn, writer)
+    listener = CaptureListener(conn, writer, sink)
     conn.set_listener("capture", listener)
     # client-id + activemq.subscriptionName + per-message ACK = durable subscription.
     conn.connect(
@@ -164,6 +181,19 @@ def _log_stats(listener: CaptureListener) -> None:
         s.frames, s.messages, s.bytes, s.unparseable,
         f"{age:.0f}" if age is not None else "none",
     )  # fmt: skip
+    if listener.sink is not None:
+        log.log(*produce_message(listener.sink.take_stats()))
+
+
+def produce_message(p) -> tuple[int, str]:
+    """Log level and message for one interval of Kafka publishing."""
+    line = f"kafka sent={p.sent} delivered={p.delivered} failed={p.failed}"
+    if not p.failed:
+        return logging.INFO, line
+    return logging.WARNING, (
+        f"{line}; NOT IN KAFKA: frames received {p.failed_from:%Y-%m-%d %H:%M:%S}"
+        f"–{p.failed_to:%H:%M:%S} UTC ({p.last_error}); refill them with the replay tool"
+    )
 
 
 def run(
@@ -171,6 +201,7 @@ def run(
     writer: RawCaptureWriter,
     stop: threading.Event,
     stats_interval_s: float = 60,
+    sink: TrustProducer | None = None,
 ) -> None:
     """Capture until `stop` is set, reconnecting with jittered exponential backoff."""
     compressed = writer.compress_completed(datetime.now(UTC))
@@ -184,7 +215,7 @@ def run(
         log.info("last captured frame on disk: %s", disconnected_at.isoformat())
     while not stop.is_set():
         try:
-            conn, listener = _connect(settings, writer)
+            conn, listener = _connect(settings, writer, sink)
         except Exception as exc:  # network errors, refused login, broker unavailable
             delay = backoff.next_delay()
             log.warning("connect failed (%r); retrying in %.1fs", exc, delay)
@@ -222,4 +253,9 @@ def run(
             conn.disconnect()
 
     writer.close()
+    if sink is not None:
+        undelivered = sink.flush()
+        log.log(*produce_message(sink.take_stats()))
+        if undelivered:
+            log.warning("%d records still undelivered to Kafka at shutdown", undelivered)
     log.info("stopped")
