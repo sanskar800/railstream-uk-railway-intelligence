@@ -87,6 +87,12 @@ Edge case: at the autumn change (last Sunday of October) 01:00–02:00 local hap
 
 Observed in November (UK time = UTC), the sample decodes correctly either way (F2), so the rule cannot be validated on live data until 2027-03-28.
 
+**Decisions (implemented in `trust/timestamps.py`, tests in `tests/unit/test_timestamps.py`):**
+- Autumn repeated hour: of the two UTC candidates, take the one **closest to `msg_queue_timestamp`** (true UTC; a report is queued seconds to minutes after the event). No reference: the first occurrence (BST).
+- Spring gap (a wall-clock time that never existed): read as GMT, and flagged as `nonexistent` so it can be counted.
+- Field names as they occur in the data (findings F13): `origin_dep_timestamp` (0001) is the wiki's `orig_dep_timestamp`, which never occurs; `orig_loc_timestamp` (0002) is 0002's spelling of `original_loc_timestamp`. Both are treated as wall clock. Other epoch fields (`creation_timestamp`, `reinstatement_timestamp`, `coo_timestamp`, `event_timestamp`) are system record times, taken as true UTC. `tp_origin_timestamp` is a **date** string (`YYYY-MM-DD`), not epoch milliseconds.
+- Absent optional fields are **omitted** from the body, not sent as empty strings (0 empty values in a day of 851,834 messages); the parser accepts both.
+
 ### Correctness properties that shape the pipeline
 
 - **Rounding:** TRUST reports at 30-second intervals and rounds to whole minutes; "1 minute late" may be 31 seconds. Small negative lags (event time after receive time) are expected.

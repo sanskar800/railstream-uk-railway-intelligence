@@ -9,6 +9,7 @@ dependencies = [
     "pydantic-settings>=2.16.2",
     "python-dotenv>=1.2.4",
     "stomp-py>=9.0.0",
+    "tzdata>=2026.6",
 ]
 
 [tool.uv]

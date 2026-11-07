@@ -94,3 +94,10 @@ The live bridge (own subscription `railstream-live`) ran 15:11:40–15:15:10 UTC
 - Also found: about 1 in 20 fresh Kafka connections to `localhost:19092` failed on Windows (`localhost` also resolves to `::1`, where nothing listens); 30/30 succeeded with `127.0.0.1`, which is now both the bootstrap and the advertised address (development.md §4).
 - Evidence: `results/dev/2026-11-07-kafka-outage/` (bridge log with the stop/start times; disk-vs-Kafka comparison output).
 
+## F13. The BST field list does not match the field names in the data (2026-11-07)
+
+Every time-like field in a full day (2026-11-06, 851,834 messages), by message type: the wiki's wall-clock list names `orig_dep_timestamp`, which **never occurs**; activations (0001, 32,383) carry `origin_dep_timestamp` instead, and cancellations (0002) spell the original-location time `orig_loc_timestamp` (15) where movements use `original_loc_timestamp`. Further epoch fields are not on the list at all: `creation_timestamp` (0001), `reinstatement_timestamp` (0005), `coo_timestamp` (0006), `event_timestamp` (0007/0008). `tp_origin_timestamp` holds a date string (`2026-11-06`), not epoch milliseconds. No field was ever an empty string: absent optional fields are omitted.
+
+- Consequence: the two renamed fields are treated as wall clock (same meaning as the listed names); system record times are taken as true UTC, as documented. None of these decisions can be checked before BST begins on 2027-03-28 (in November both readings give the same instant), but every gold metric uses only `actual`, `planned`, `gbtt` and `canx` timestamps, which are on the documented list. Converting all 851,834 messages raised 0 errors.
+- Evidence: recomputable from `data/raw/trust/date=2026-11-06/` (not committed); the field inventory is quoted in data-sources.md (timestamps).
+
