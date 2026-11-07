@@ -3,15 +3,17 @@
 Delivery guarantee: at least once. A frame is acknowledged only after RawCaptureWriter has
 fsynced it, so a crash can cause a redelivered duplicate (removed later in silver) but not a
 loss. The broker keeps unacknowledged and missed messages for 5 minutes only, so a longer
-disconnection is logged as a probable data gap.
+disconnection is logged as a data gap. A connection that stays up while frames stop arriving is
+logged as a quiet feed.
 """
 
 from __future__ import annotations
 
-import json
 import logging
+import random
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -19,11 +21,66 @@ import stomp
 
 from ingest.stomp_bridge.capture import RawCaptureWriter
 from ingest.stomp_bridge.config import BridgeSettings
+from ingest.stomp_bridge.frames import FrameError, split_frame
 
 log = logging.getLogger("stomp_bridge")
 
 MESSAGE_TTL_S = 300  # broker-side expiry of queued messages (Open Rail Data wiki)
-MAX_BACKOFF_S = 60
+
+
+class Backoff:
+    """Exponential backoff with "equal jitter": each delay is random in [ceiling/2, ceiling].
+
+    Jitter stops many clients that lost the broker at the same moment from retrying in lockstep;
+    keeping half the ceiling as a floor avoids near-zero delays that would hammer a broker that
+    is refusing connections.
+    """
+
+    def __init__(
+        self, base_s: float = 1.0, cap_s: float = 60.0, rng: Callable[[], float] = random.random
+    ) -> None:
+        self.base_s, self.cap_s, self.rng = base_s, cap_s, rng
+        self.attempt = 0
+
+    def next_delay(self) -> float:
+        ceiling = min(self.cap_s, self.base_s * 2**self.attempt)
+        self.attempt += 1
+        return ceiling / 2 + self.rng() * ceiling / 2
+
+    def reset(self) -> None:
+        self.attempt = 0
+
+
+class QuietDetector:
+    """Detects a connected feed that has stopped sending frames, and when it resumes."""
+
+    def __init__(self, quiet_after_s: float) -> None:
+        self.quiet_after_s = quiet_after_s
+        self.quiet_since: datetime | None = None
+
+    def check(self, now: datetime, last_frame_at: datetime | None) -> tuple[str, float] | None:
+        """Return ("quiet", silent_s) or ("resumed", quiet_s) on a state change, else None."""
+        if last_frame_at is None:
+            return None
+        silent_s = (now - last_frame_at).total_seconds()
+        if self.quiet_since is None and silent_s >= self.quiet_after_s:
+            self.quiet_since = last_frame_at
+            return "quiet", silent_s
+        if self.quiet_since is not None and last_frame_at > self.quiet_since:
+            quiet_s = (last_frame_at - self.quiet_since).total_seconds()
+            self.quiet_since = None
+            return "resumed", quiet_s
+        return None
+
+
+def reconnect_message(gap_s: float, since: datetime) -> tuple[int, str]:
+    """Log level and message for a reconnection after `gap_s` seconds offline."""
+    if gap_s > MESSAGE_TTL_S:
+        return logging.WARNING, (
+            f"DATA GAP: disconnected {gap_s:.0f}s since {since.isoformat()}; "
+            f"messages older than {MESSAGE_TTL_S}s expired"
+        )
+    return logging.INFO, f"reconnected after {gap_s:.0f}s; queued messages will be redelivered"
 
 
 @dataclass
@@ -57,9 +114,8 @@ class CaptureListener(stomp.ConnectionListener):
             self.stats.bytes += len(frame.body.encode("utf-8"))
             self.stats.last_frame_at = received_at
             try:
-                payload = json.loads(frame.body)
-                self.stats.messages += len(payload) if isinstance(payload, list) else 1
-            except json.JSONDecodeError:
+                self.stats.messages += len(split_frame(frame.body))
+            except FrameError:
                 self.stats.unparseable += 1  # still captured raw; parsing happens downstream
 
     def on_error(self, frame) -> None:
@@ -67,6 +123,11 @@ class CaptureListener(stomp.ConnectionListener):
 
     def on_disconnected(self) -> None:
         self.disconnected.set()
+
+    @property
+    def last_frame_at(self) -> datetime | None:
+        with self.lock:
+            return self.stats.last_frame_at
 
     def take_stats(self) -> Stats:
         with self.lock:
@@ -84,7 +145,7 @@ def _connect(settings: BridgeSettings, writer: RawCaptureWriter):
         settings.username,
         settings.password.get_secret_value(),
         wait=True,
-        headers={"client-id": settings.username},
+        headers={"client-id": settings.effective_client_id},
     )
     conn.subscribe(
         destination=f"/topic/{settings.topic}",
@@ -95,60 +156,63 @@ def _connect(settings: BridgeSettings, writer: RawCaptureWriter):
     return conn, listener
 
 
+def _log_stats(listener: CaptureListener) -> None:
+    s = listener.take_stats()
+    age = None if s.last_frame_at is None else (datetime.now(UTC) - s.last_frame_at).total_seconds()
+    log.info(
+        "frames=%d messages=%d bytes=%d unparseable=%d last_frame_age_s=%s",
+        s.frames, s.messages, s.bytes, s.unparseable,
+        f"{age:.0f}" if age is not None else "none",
+    )  # fmt: skip
+
+
 def run(
     settings: BridgeSettings,
     writer: RawCaptureWriter,
     stop: threading.Event,
     stats_interval_s: float = 60,
 ) -> None:
-    """Capture until `stop` is set, reconnecting with exponential backoff."""
+    """Capture until `stop` is set, reconnecting with jittered exponential backoff."""
     compressed = writer.compress_completed(datetime.now(UTC))
     if compressed:
         log.info("compressed %d completed hour file(s) left from a previous run", len(compressed))
 
-    backoff = 1
-    disconnected_at: datetime | None = None
+    backoff = Backoff()
+    # "Away since" the last frame on disk, so a gap across a restart is detected too.
+    disconnected_at: datetime | None = writer.last_received_at()
+    if disconnected_at is not None:
+        log.info("last captured frame on disk: %s", disconnected_at.isoformat())
     while not stop.is_set():
         try:
             conn, listener = _connect(settings, writer)
         except Exception as exc:  # network errors, refused login, broker unavailable
-            log.warning("connect failed (%s); retrying in %ds", exc, backoff)
-            stop.wait(backoff)
-            backoff = min(backoff * 2, MAX_BACKOFF_S)
+            delay = backoff.next_delay()
+            log.warning("connect failed (%r); retrying in %.1fs", exc, delay)
+            stop.wait(delay)
             continue
 
-        backoff = 1
+        backoff.reset()
         log.info(
-            "subscribed to /topic/%s (durable: %s)", settings.topic, settings.subscription_name
-        )
+            "subscribed to /topic/%s (client-id: %s, durable: %s)",
+            settings.topic, settings.effective_client_id, settings.subscription_name,
+        )  # fmt: skip
         if disconnected_at is not None:
             gap_s = (datetime.now(UTC) - disconnected_at).total_seconds()
-            if gap_s > MESSAGE_TTL_S:
-                log.warning(
-                    "DATA GAP: disconnected %.0fs since %s; messages older than %ds expired",
-                    gap_s,
-                    disconnected_at.isoformat(),
-                    MESSAGE_TTL_S,
-                )
-            else:
-                log.info("reconnected after %.0fs; queued messages will be redelivered", gap_s)
+            log.log(*reconnect_message(gap_s, disconnected_at))
 
+        quiet = QuietDetector(settings.quiet_after_s)
         next_stats = time.monotonic() + stats_interval_s
         while not stop.is_set() and not listener.disconnected.is_set():
             stop.wait(1)  # short waits keep Ctrl+C responsive on Windows
+            event = quiet.check(datetime.now(UTC), listener.last_frame_at)
+            if event is not None:
+                kind, seconds = event
+                if kind == "quiet":
+                    log.warning("FEED QUIET: connected but no frames for %.0fs", seconds)
+                else:
+                    log.info("feed resumed after %.0fs quiet", seconds)
             if time.monotonic() >= next_stats:
-                s = listener.take_stats()
-                age = None
-                if s.last_frame_at is not None:
-                    age = (datetime.now(UTC) - s.last_frame_at).total_seconds()
-                log.info(
-                    "frames=%d messages=%d bytes=%d unparseable=%d last_frame_age_s=%s",
-                    s.frames,
-                    s.messages,
-                    s.bytes,
-                    s.unparseable,
-                    f"{age:.0f}" if age is not None else "none",
-                )
+                _log_stats(listener)
                 next_stats += stats_interval_s
 
         if listener.disconnected.is_set():

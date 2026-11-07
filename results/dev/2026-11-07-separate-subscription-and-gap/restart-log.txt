@@ -1,0 +1,8 @@
+restart 13:53:10 UTC
+2026-11-07 13:53:11,679 INFO stomp_bridge last captured frame on disk: 2026-11-07T13:46:52.524047+00:00
+2026-11-07 13:53:12,263 INFO stomp_bridge subscribed to /topic/TRAIN_MVT_ALL_TOC (client-id: <email>-test, durable: railstream-test)
+2026-11-07 13:53:12,263 WARNING stomp_bridge DATA GAP: disconnected 380s since 2026-11-07T13:46:52.524047+00:00; messages older than 300s expired
+2026-11-07 13:54:12,813 INFO stomp_bridge frames=166 messages=4224 bytes=3069652 unparseable=0 last_frame_age_s=0
+2026-11-07 13:54:21,657 INFO stomp_bridge stopped
+
+[exited with code 0]

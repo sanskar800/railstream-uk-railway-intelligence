@@ -57,3 +57,31 @@ Docker Hub returns "object not found" for the `minio/minio` repository, `docker 
 - Consequence: the spec's MinIO cannot be used as published. Replaced with SeaweedFS 4.52 (mature, Apache-2.0, signed images published 2026-11-02); RustFS 1.0.4 was the alternative. Recorded in architecture.md §6.
 - Verified: Lakekeeper created the warehouse on SeaweedFS (storage validation write), and a PyIceberg round trip (create table, two appends = two snapshots, read back, drop) succeeded through Lakekeeper with remote signing.
 - Lesson: check that a pinned dependency can still be pulled; "pin a version" does not protect against a registry removing it.
+
+## F8. A real broker outage was absorbed without data loss (2026-11-05)
+
+At 21:50:22 UTC the broker dropped the VM bridge's connection and then refused new ones ("Connection refused"). The bridge retried with exponential backoff (1, 2, 4, 8, 16, 32 s), reconnected after **71 s**, was dropped again 30 s later and reconnected after **36 s** (21:52:39). Both outages were under the broker's 5-minute expiry, so the durable subscription redelivered the queued messages; the bridge then ran for ~40 hours without a disconnection.
+
+- Consequence: exponential backoff and the durable subscription work against a real outage. The log line `connect failed ()` carried an empty exception message, so the cause was not visible: failures are now logged with the exception type (`%r`), and retries are jittered (equal jitter) so many clients do not retry in lockstep.
+- Evidence: VM bridge log, 2026-11-05 21:50–21:53 UTC (quoted above).
+
+## F9. First full day: 851,834 messages; frames never gap more than 20 s (2026-11-07)
+
+Friday 2026-11-06 (UTC), 24 complete hours captured on the VM: **851,834 messages, 35,572 frames, 38.6 MB compressed**. Messages per hour range from ~2k (02:00–04:00 UTC) to ~52k (08:00 UTC morning peak), with a steady ~44–49k through the day.
+
+- **No empty frames** in the day (0 of 35,572), although the documentation allows them. At night frames arrive on the broker's 5-second batching tick; the **longest gap between frames was 20 s**. Hence "feed quiet" = no frame for **60 s** (3× the worst observed gap); the Sunday ~02:00 outage should trigger it, correctly.
+- Evidence: `data/raw/trust/date=2026-11-06/` (24 hourly files; pulled from the VM, not committed); counts recomputed by reading every frame.
+
+## F10. A separate durable subscription receives a full copy of the feed (2026-11-07)
+
+A test bridge on the laptop used a different `client-id` and subscription name (`railstream-test`) while the VM bridge kept its own. In the same minutes both received the whole feed: VM 28 and 27 frames (686 and 668 messages), test bridge 28 and 27 frames (699 and 655 messages; the minute windows are offset by ~3 s). Compare F6, where two bridges sharing *one* subscription each got about half.
+
+- Consequence: the VM can keep the canonical 24/7 archive while the laptop runs its own live subscription for the streaming pipeline (Day 3). A test subscription must be removed afterwards (STOMP UNSUBSCRIBE with `activemq.subscriptionName`), or it lingers on the broker.
+- Evidence: VM bridge log 13:43–13:46 UTC; `results/dev/2026-11-07-separate-subscription-and-gap/`.
+
+## F11. The broker keeps exactly the last 5 minutes; longer outages are now detected across restarts (2026-11-07)
+
+The test bridge was stopped at 13:46:52 UTC and restarted at 13:53:12 (380 s). On restart it logged `DATA GAP: disconnected 380s since 13:46:52`. The oldest message it then received had been queued **303 s** before the reconnect; messages queued between 13:46:52 and 13:48:09 (~76 s) were never delivered. The first minute after the restart carried 166 frames (4,224 messages): the 5-minute backlog plus live traffic.
+
+- Consequence: the 5-minute expiry from the documentation is confirmed by measurement. A first version of the bridge detected gaps only *within* one process, so a long restart (e.g. a VM reboot) would have lost data silently; it now recovers the last capture time from the files on disk at startup.
+- Evidence: `results/dev/2026-11-07-separate-subscription-and-gap/restart-log.txt` and `hour=13.jsonl.gz` (compare `received_at` with `msg_queue_timestamp`).

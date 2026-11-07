@@ -70,6 +70,27 @@ class RawCaptureWriter:
                 done.append(compress_file(path))
         return done
 
+    def last_received_at(self) -> datetime | None:
+        """Receive time of the newest captured frame, read back from disk (None if no capture).
+
+        Lets a restarted bridge know how long it was away, so a gap across a process or host
+        restart is detected, not only gaps within one run.
+        """
+        files = sorted(
+            self.root.glob("date=*/hour=*.jsonl*"),
+            key=lambda p: (p.parent.name, p.name.split(".")[0]),
+        )
+        for path in reversed(files):
+            opener = gzip.open if path.suffix == ".gz" else open
+            last = None
+            with opener(path, "rt", encoding="utf-8") as fh:
+                for line in fh:
+                    if line.strip():
+                        last = line
+            if last is not None:
+                return datetime.fromisoformat(json.loads(last)["received_at"])
+        return None
+
     def close(self) -> None:
         """Close the open hour without compressing it: a restart in the same hour appends to it."""
         if self._fh is not None:

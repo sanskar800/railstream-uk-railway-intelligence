@@ -80,3 +80,15 @@ def test_compress_is_idempotent_if_interrupted_before_unlink(tmp_path):
 def test_hours_are_utc_regardless_of_input_offset():
     bst = timezone(timedelta(hours=1))
     assert hour_of(datetime(2026, 7, 1, 10, 30, tzinfo=bst)) == datetime(2026, 7, 1, 9, tzinfo=UTC)
+
+
+def test_last_received_at_reads_the_newest_frame_back_from_disk(tmp_path):
+    writer = RawCaptureWriter(tmp_path)
+    assert writer.last_received_at() is None  # nothing captured yet
+
+    writer.write(T0, {}, "[1]")
+    writer.write(T0 + timedelta(seconds=3), {}, "[2]")  # new hour; hour 14 compressed
+    writer.close()
+
+    restarted = RawCaptureWriter(tmp_path)
+    assert restarted.last_received_at() == T0 + timedelta(seconds=3)
