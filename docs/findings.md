@@ -117,3 +117,12 @@ Probing Redpanda 26.1's JSON Schema compatibility check (BACKWARD) with delibera
 - Contract result: 0 rejections in 2,061,370 messages over three days (data-sources.md, Data contracts).
 - Evidence: probe commands and outputs in this session (reproducible with `uv run python -m ingest.stream.schemas --check` after editing a contract); throughput measured on the first 50,000 messages of 2026-11-06 08:00 UTC.
 
+## F16. Bronze writes every Kafka offset exactly once; three build and catalog lessons (2026-11-09)
+
+First run of the bronze job (Spark 4.1.4, Iceberg 1.12.0) from offset 0 while the live bridge was publishing: batch 0 wrote the 83,533-record backlog in 6.2 s (13,510 rows/s); following 1-minute batches wrote ~470–735 rows in ~1.6 s. After batch 2 the table held **84,737 rows and 84,737 distinct (kafka_partition, kafka_offset) pairs**; per partition the offsets ran from 0 to 27,818 / 28,763 / 28,153 with no gaps, matching the end offsets the job logged. The newest snapshot's summary carries `spark.sql.streaming.queryId` and `epochId` (the batch id Iceberg uses to skip a re-run batch). 84,737 messages took 3.7 MB of zstd Parquet in 4 files; the container used 705 MiB of its 1.5 GiB limit.
+
+- Image size: the first build was 4.64 GB because pyspark is a source distribution and uv's build cache stayed in the layer (1.99 GB); `--no-cache` brought it to 1.81 GB (the uv layer to 531 MB).
+- `DROP TABLE ... PURGE` fails after succeeding: Lakekeeper deletes the files itself, then refuses to sign Spark's own delete requests for the dropped table. Use plain `DROP TABLE`.
+- Spark's console progress bar (carriage returns) glued log lines together and hid output from line filters; disabled for jobs.
+- Evidence: bronze job log 2026-11-09 13:56–13:58 UTC; verification queries in this session (reproducible: `SELECT kafka_partition, min(kafka_offset), max(kafka_offset), count(*) FROM bronze.trust_movement GROUP BY 1`).
+

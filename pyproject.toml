@@ -20,6 +20,11 @@ dependencies = [
 package = false
 
 [dependency-groups]
+# Installed only in the Spark image (infra/spark/Dockerfile): pyspark bundles ~400 MB of jars, and
+# Spark needs Java, which the laptop does not have (Spark runs in Docker).
+spark = [
+    "pyspark==4.1.4",
+]
 dev = [
     "pytest>=9.2.0",
     "ruff>=0.17.3",

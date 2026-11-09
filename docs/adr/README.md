@@ -12,6 +12,7 @@ An ADR records **one** significant decision: the context, the options considered
 | [004](004-dbt-adapter-and-gold-storage.md) | dbt on DuckDB; gold written to Iceberg if a Day 9 spike proves it, otherwise to DuckDB/Parquet | Accepted (2026-11-05) |
 | [005](005-disk-before-kafka.md) | The live bridge writes to disk before acknowledging, then publishes to Kafka asynchronously; in a cloud deployment with replicated Kafka it would acknowledge on Kafka delivery | Accepted (2026-11-07) |
 | [006](006-schema-compatibility-mode.md) | BACKWARD_TRANSITIVE for every contract (the archive is replayed from day one), plus a required-field guard where the registry's JSON Schema check is blind | Accepted (2026-11-09) |
+| [007](007-spark-runtime-and-bronze-layout.md) | Spark 4.1.4 + Iceberg 1.12.0 in our own Python 3.12 image; checkpoints on a Docker volume; bronze partitioned by ingestion day, one file per batch | Accepted (2026-11-09) |
 
 Smaller decisions and accepted deviations from the spec are listed in [architecture.md §6](../architecture.md#6-deviations-from-the-original-specification); what the build revealed is in [findings.md](../findings.md).
 

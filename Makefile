@@ -4,7 +4,7 @@
 # .env is optional for the local stack: every variable it can set has a local default.
 COMPOSE = docker compose $(if $(wildcard .env),--env-file .env,) -f infra/compose/compose.yaml
 
-.PHONY: help setup test lint format live replay topics schemas pull-raw up down ps logs tools stats
+.PHONY: help setup test lint format live replay topics schemas stream stream-logs pull-raw up down ps logs tools stats
 
 help:  ## List targets
 	@uv run python -c "import re; [print(f\"{m[0]:<12} {m[1]}\") for m in re.findall(r\"^([a-z-]+):.*## (.*)$$\", open(\"Makefile\").read(), re.M)]"
@@ -48,8 +48,14 @@ topics:  ## Create missing Kafka topics (idempotent; also part of `up`)
 tools:  ## Also start Redpanda Console on http://localhost:8085
 	$(COMPOSE) --profile tools up -d --wait console
 
+stream:  ## Start the Spark bronze job (builds the image; Spark UI on http://localhost:4040)
+	$(COMPOSE) --profile stream up -d --build spark-bronze
+
+stream-logs:  ## Follow the Spark job's per-batch log
+	$(COMPOSE) --profile stream logs -f spark-bronze
+
 down:  ## Stop the stack (data volumes are kept)
-	$(COMPOSE) --profile tools --profile init down
+	$(COMPOSE) --profile tools --profile init --profile stream down
 
 ps:  ## Show stack status
 	$(COMPOSE) --profile tools ps -a

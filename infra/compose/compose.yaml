@@ -1,5 +1,6 @@
 # RailStream local stack. Run through the Makefile (make up / make down / make ps).
-# Profiles: core services have none (always started); `tools` = Redpanda Console.
+# Profiles: core services have none (always started); `tools` = Redpanda Console;
+# `stream` = the Spark streaming jobs (make stream).
 # All ports bind to 127.0.0.1. Credentials are local-development defaults, overridable in .env.
 name: railstream
 
@@ -127,7 +128,32 @@ services:
       redpanda: {condition: service_healthy}
     mem_limit: 256m
 
+  # Kafka -> Iceberg bronze (task 5.2). Spark in local mode inside one container (ADR-007).
+  spark-bronze:
+    build:
+      context: ../..
+      dockerfile: infra/spark/Dockerfile
+    image: railstream-spark:dev
+    profiles: ["stream"]
+    command: ["python", "-m", "streaming.bronze"]
+    environment:
+      KAFKA_BOOTSTRAP: redpanda:9092
+      CATALOG_URI: http://lakekeeper:8181/catalog
+      WAREHOUSE: railstream
+      CHECKPOINT_ROOT: /checkpoints
+      SPARK_DRIVER_MEMORY: 1g
+    ports:
+      - 127.0.0.1:4040:4040     # Spark UI (jobs, streaming batches)
+    volumes:
+      - spark-checkpoints:/checkpoints
+    depends_on:
+      redpanda: {condition: service_healthy}
+      lakekeeper: {condition: service_healthy}
+    mem_limit: 1536m            # 1 GB driver heap + JVM overhead + Python
+    restart: unless-stopped
+
 volumes:
+  spark-checkpoints:
   redpanda-data:
   seaweedfs-data:
   postgres-data:

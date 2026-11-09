@@ -119,10 +119,12 @@ Times are UTC (a timestamp without an offset is read as UTC). Replaying a window
 | Postgres | `postgres:18.6-alpine` | 5434 | Lakekeeper catalog database (Airflow later) |
 | Lakekeeper | `quay.io/lakekeeper/catalog:v0.14.2` | 8181 | Iceberg REST catalog, ADR-003 |
 | Redpanda Console (`make tools`) | `redpandadata/console:v3.13.1` | 8085 | Web UI: topics, messages, schemas, lag |
+| Spark bronze job (`make stream`) | `railstream-spark:dev`, built from `infra/spark/Dockerfile` (Spark 4.1.4, Iceberg 1.12.0, Python 3.12, Java 17) | 4040 (Spark UI) | Kafka → Iceberg `bronze.trust_movement`, ADR-007; 1.5 GB limit, ~705 MiB in use |
 
 - `make up` starts the services, waits until healthy, then runs `lakehouse-init` (idempotent): creates the `warehouse` bucket, bootstraps Lakekeeper and creates the `railstream` warehouse (Lakekeeper validates storage by writing a test object). Then it creates the Kafka topics declared in `ingest/stream/topics.py` (`make topics`; existing topics are kept). Safe to run repeatedly.
 - Kafka from the laptop: **`127.0.0.1:19092`, not `localhost:19092`**. On Windows `localhost` resolves to IPv6 `::1` as well, where nothing listens, and librdkafka failed about 1 in 20 fresh connections when it tried `::1` first (30/30 succeeded with `127.0.0.1`). Redpanda also advertises `127.0.0.1:19092`, because clients reconnect to the advertised address, not the bootstrap one.
 - `make tools` (Console), `make ps`, `make logs`, `make stats`, `make down` (keeps data volumes).
+- `make stream` starts the bronze job (builds the image the first time, ~4 min); `make stream-logs` shows one line per micro-batch. Its checkpoint is in the `spark-checkpoints` volume: deleting that volume makes the next run start again from the earliest Kafka offset (duplicates in bronze), so do not, unless the table is dropped too.
 - Remote signing: clients do not need S3 keys; Lakekeeper signs storage requests for them.
 - **Open (Day 5/9):** Lakekeeper tells clients the storage endpoint is `http://seaweedfs:8333`, which resolves only inside the Docker network. Clients inside the network (Spark) are fine; clients on the laptop (DuckDB, dbt, the API) need either to run in the network or an endpoint name that resolves on both sides.
 - Ports 5432/5433 (other local databases), 8000/8010/3000/3001/8080/8081 (other projects, Relay) are avoided.
