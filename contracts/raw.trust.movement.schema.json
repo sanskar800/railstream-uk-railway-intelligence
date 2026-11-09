@@ -1,0 +1,355 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Raw TRUST message (one record of raw.trust.movement)",
+  "description": "One TRUST message exactly as Network Rail sends it: every value is a string. Open content model: fields not listed here are allowed, because the feed is external and may add fields. Rules come from the Open Rail Data wiki and from two full days of capture (2026-11-06, 2026-11-08; 1.3 M messages); see docs/data-sources.md, Data contracts.",
+  "type": "object",
+  "required": [
+    "header",
+    "body"
+  ],
+  "properties": {
+    "header": {
+      "type": "object",
+      "required": [
+        "msg_type",
+        "msg_queue_timestamp",
+        "source_system_id"
+      ],
+      "properties": {
+        "msg_type": {
+          "enum": [
+            "0001",
+            "0002",
+            "0003",
+            "0004",
+            "0005",
+            "0006",
+            "0007",
+            "0008"
+          ]
+        },
+        "msg_queue_timestamp": {
+          "$ref": "#/definitions/epoch_ms"
+        },
+        "source_system_id": {
+          "type": "string"
+        },
+        "original_data_source": {
+          "type": "string"
+        },
+        "source_dev_id": {
+          "type": "string"
+        },
+        "user_id": {
+          "type": "string"
+        }
+      }
+    },
+    "body": {
+      "description": "Type rules for every field of every message type live here, where the Schema Registry's compatibility check sees them; the allOf branches below only say which fields each message type requires (findings F15).",
+      "type": "object",
+      "required": [
+        "train_id"
+      ],
+      "properties": {
+        "actual_timestamp": {
+          "$ref": "#/definitions/epoch_ms"
+        },
+        "auto_expected": {
+          "$ref": "#/definitions/flag"
+        },
+        "canx_reason_code": {
+          "type": "string",
+          "pattern": "^[A-Z0-9]{2}$"
+        },
+        "canx_timestamp": {
+          "$ref": "#/definitions/epoch_ms"
+        },
+        "canx_type": {
+          "enum": [
+            "ON CALL",
+            "AT ORIGIN",
+            "EN ROUTE",
+            "OUT OF PLAN"
+          ]
+        },
+        "correction_ind": {
+          "$ref": "#/definitions/flag"
+        },
+        "creation_timestamp": {
+          "$ref": "#/definitions/epoch_ms"
+        },
+        "current_train_id": {
+          "$ref": "#/definitions/train_id"
+        },
+        "delay_monitoring_point": {
+          "$ref": "#/definitions/flag"
+        },
+        "dep_timestamp": {
+          "$ref": "#/definitions/epoch_ms"
+        },
+        "direction_ind": {
+          "enum": [
+            "UP",
+            "DOWN"
+          ]
+        },
+        "division_code": {
+          "$ref": "#/definitions/two_digits"
+        },
+        "event_source": {
+          "enum": [
+            "AUTOMATIC",
+            "MANUAL"
+          ]
+        },
+        "event_type": {
+          "enum": [
+            "ARRIVAL",
+            "DEPARTURE"
+          ]
+        },
+        "gbtt_timestamp": {
+          "$ref": "#/definitions/epoch_ms"
+        },
+        "line_ind": {
+          "type": "string"
+        },
+        "loc_stanox": {
+          "$ref": "#/definitions/stanox"
+        },
+        "next_report_run_time": {
+          "type": "string",
+          "pattern": "^[0-9]{1,4}$"
+        },
+        "next_report_stanox": {
+          "$ref": "#/definitions/stanox"
+        },
+        "offroute_ind": {
+          "$ref": "#/definitions/flag"
+        },
+        "orig_loc_stanox": {
+          "$ref": "#/definitions/stanox"
+        },
+        "orig_loc_timestamp": {
+          "$ref": "#/definitions/epoch_ms"
+        },
+        "origin_dep_timestamp": {
+          "$ref": "#/definitions/epoch_ms"
+        },
+        "original_loc_stanox": {
+          "$ref": "#/definitions/stanox"
+        },
+        "original_loc_timestamp": {
+          "$ref": "#/definitions/epoch_ms"
+        },
+        "planned_event_type": {
+          "enum": [
+            "ARRIVAL",
+            "DEPARTURE",
+            "DESTINATION"
+          ]
+        },
+        "planned_timestamp": {
+          "$ref": "#/definitions/epoch_ms"
+        },
+        "platform": {
+          "description": "Often space-padded (\" 9\"); trimmed in silver.",
+          "type": "string"
+        },
+        "reporting_stanox": {
+          "$ref": "#/definitions/stanox"
+        },
+        "route": {
+          "type": "string"
+        },
+        "sched_origin_stanox": {
+          "$ref": "#/definitions/stanox"
+        },
+        "schedule_end_date": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        },
+        "schedule_start_date": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        },
+        "timetable_variation": {
+          "description": "Whole minutes, never negative: the sign is in variation_status.",
+          "type": "string",
+          "pattern": "^[0-9]{1,4}$"
+        },
+        "toc_id": {
+          "$ref": "#/definitions/two_digits"
+        },
+        "tp_origin_timestamp": {
+          "description": "A date, not epoch milliseconds.",
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        },
+        "train_file_address": {
+          "type": "string"
+        },
+        "train_id": {
+          "$ref": "#/definitions/train_id"
+        },
+        "train_service_code": {
+          "type": "string",
+          "pattern": "^[0-9]{8}$"
+        },
+        "train_terminated": {
+          "$ref": "#/definitions/flag"
+        },
+        "train_uid": {
+          "description": "Sometimes space-padded (\" 12345\").",
+          "type": "string",
+          "pattern": "^[ A-Z][0-9]{5}$"
+        },
+        "variation_status": {
+          "enum": [
+            "EARLY",
+            "ON TIME",
+            "LATE",
+            "OFF ROUTE"
+          ]
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "header": {
+            "properties": {
+              "msg_type": {
+                "const": "0003"
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "description": "0003 train movement. planned_timestamp and reporting_stanox are absent exactly when the report is off route (offroute_ind = true), observed on all 1.25 M movements of the two profiled days; silver needs planned_timestamp to compute delay.",
+        "properties": {
+          "body": {
+            "required": [
+              "train_id",
+              "actual_timestamp",
+              "loc_stanox",
+              "event_type",
+              "planned_event_type",
+              "event_source",
+              "timetable_variation",
+              "variation_status",
+              "toc_id",
+              "division_code",
+              "train_service_code",
+              "offroute_ind",
+              "correction_ind",
+              "train_terminated",
+              "delay_monitoring_point"
+            ],
+            "if": {
+              "properties": {
+                "offroute_ind": {
+                  "const": "false"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "planned_timestamp",
+                "reporting_stanox"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "header": {
+            "properties": {
+              "msg_type": {
+                "const": "0001"
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "description": "0001 train activation: links train_id to its schedule (train_uid).",
+        "properties": {
+          "body": {
+            "required": [
+              "train_id",
+              "train_uid",
+              "creation_timestamp",
+              "origin_dep_timestamp",
+              "sched_origin_stanox",
+              "schedule_start_date",
+              "schedule_end_date",
+              "toc_id"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "header": {
+            "properties": {
+              "msg_type": {
+                "const": "0002"
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "description": "0002 train cancellation.",
+        "properties": {
+          "body": {
+            "required": [
+              "train_id",
+              "canx_timestamp",
+              "loc_stanox",
+              "canx_reason_code",
+              "canx_type",
+              "toc_id"
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "definitions": {
+    "epoch_ms": {
+      "description": "Epoch milliseconds as a string. Seven fields hold UK wall-clock time (BST trap, trust/timestamps.py).",
+      "type": "string",
+      "pattern": "^[0-9]{13}$"
+    },
+    "stanox": {
+      "type": "string",
+      "pattern": "^[0-9]{5}$"
+    },
+    "two_digits": {
+      "type": "string",
+      "pattern": "^[0-9]{2}$"
+    },
+    "flag": {
+      "enum": [
+        "true",
+        "false"
+      ]
+    },
+    "train_id": {
+      "description": "10 characters: origin STANOX prefix, headcode, call code, day of month.",
+      "type": "string",
+      "pattern": "^[0-9A-Z]{10}$"
+    }
+  }
+}

@@ -93,6 +93,20 @@ Observed in November (UK time = UTC), the sample decodes correctly either way (F
 - Field names as they occur in the data (findings F13): `origin_dep_timestamp` (0001) is the wiki's `orig_dep_timestamp`, which never occurs; `orig_loc_timestamp` (0002) is 0002's spelling of `original_loc_timestamp`. Both are treated as wall clock. Other epoch fields (`creation_timestamp`, `reinstatement_timestamp`, `coo_timestamp`, `event_timestamp`) are system record times, taken as true UTC. `tp_origin_timestamp` is a **date** string (`YYYY-MM-DD`), not epoch milliseconds.
 - Absent optional fields are **omitted** from the body, not sent as empty strings (0 empty values in a day of 851,834 messages); the parser accepts both.
 
+### Data contracts
+
+`contracts/*.schema.json` (JSON Schema draft-07), registered by `make schemas`, validated by `trust/contract.py`:
+
+| Contract | Subject | Describes |
+|---|---|---|
+| `raw.trust.movement` | `raw.trust.movement-value` | One TRUST message as received, all message types |
+| `dlq.trust.movement` | `dlq.trust.movement-value` | A rejected record: reason, failing path and rule, source topic/partition/offset, original payload |
+| `silver.trust_movement` | `silver.trust_movement` | One cleaned movement row (typed, UTC, signed delay); the target of the Day 6 silver job |
+
+How the raw rules were set: from two profiled days (2026-11-06 Friday, 2026-11-08 Sunday; 1.3 M messages) cross-checked against the wiki's optional fields. Required = present on 100% of messages of that type. Shapes: epoch timestamps 13 digits; STANOX 5 digits; `toc_id`/`division_code` 2 digits; `train_id` 10 of `[0-9A-Z]`; booleans the strings `"true"`/`"false"`; enums for the fields the pipeline branches on (`event_type`, `planned_event_type`, `event_source`, `variation_status`, `canx_type`). Invariant: `planned_timestamp` and `reporting_stanox` are absent exactly when `offroute_ind` is `"true"`, so they are required on route. Watch-outs for silver: `timetable_variation` is never negative (the sign is in `variation_status`); `platform` and `train_uid` can be space-padded.
+
+Result: **0 rejections in 2,061,370 messages** over 2026-11-06 to 11-08, including the day not used to set the rules (11-07). The schema is open (unknown upstream fields are allowed) so a new feed field never dead-letters messages; strict where the pipeline depends on a field.
+
 ### Correctness properties that shape the pipeline
 
 - **Rounding:** TRUST reports at 30-second intervals and rounds to whole minutes; "1 minute late" may be 31 seconds. Small negative lags (event time after receive time) are expected.

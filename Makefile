@@ -4,7 +4,7 @@
 # .env is optional for the local stack: every variable it can set has a local default.
 COMPOSE = docker compose $(if $(wildcard .env),--env-file .env,) -f infra/compose/compose.yaml
 
-.PHONY: help setup test lint format live replay topics pull-raw up down ps logs tools stats
+.PHONY: help setup test lint format live replay topics schemas pull-raw up down ps logs tools stats
 
 help:  ## List targets
 	@uv run python -c "import re; [print(f\"{m[0]:<12} {m[1]}\") for m in re.findall(r\"^([a-z-]+):.*## (.*)$$\", open(\"Makefile\").read(), re.M)]"
@@ -37,6 +37,10 @@ up:  ## Start the core stack (Redpanda, SeaweedFS, Postgres, Lakekeeper) and ini
 	$(COMPOSE) up -d --wait
 	$(COMPOSE) --profile init run --rm lakehouse-init
 	uv run python -m ingest.stream.topics
+	uv run python -m ingest.stream.schemas
+
+schemas:  ## Register contracts/ in the Schema Registry (idempotent; refused if incompatible)
+	uv run python -m ingest.stream.schemas
 
 topics:  ## Create missing Kafka topics (idempotent; also part of `up`)
 	uv run python -m ingest.stream.topics

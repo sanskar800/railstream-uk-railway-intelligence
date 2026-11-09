@@ -101,3 +101,19 @@ Every time-like field in a full day (2026-11-06, 851,834 messages), by message t
 - Consequence: the two renamed fields are treated as wall clock (same meaning as the listed names); system record times are taken as true UTC, as documented. None of these decisions can be checked before BST begins on 2027-03-28 (in November both readings give the same instant), but every gold metric uses only `actual`, `planned`, `gbtt` and `canx` timestamps, which are on the documented list. Converting all 851,834 messages raised 0 errors.
 - Evidence: recomputable from `data/raw/trust/date=2026-11-06/` (not committed); the field inventory is quoted in data-sources.md (timestamps).
 
+## F14. The Sunday-morning feed outage lasted 14 minutes and was detected (2026-11-09)
+
+On Sunday 2026-11-08 the VM bridge stayed connected but received no frames: `FEED QUIET: connected but no frames for 60s` at 02:06:02 UTC, `feed resumed after 830s quiet` at 02:18:52 UTC. This matches the documented weekly TRUST outage around 02:00 on Sundays; the connection itself never dropped, so only the quiet-feed detector (60 s threshold, F9) could see it.
+
+- Consequence: a ~14-minute hole every Sunday night is expected upstream, not a pipeline fault. Freshness alerts (Day 12) must not page for it, and gold metrics for that window are computed from fewer reports.
+- Evidence: VM bridge log, 2026-11-08 02:06–02:19 UTC (quoted above).
+
+## F15. The registry's JSON Schema compatibility check misses rules inside conditionals; validation needed a compiled validator (2026-11-09)
+
+Probing Redpanda 26.1's JSON Schema compatibility check (BACKWARD) with deliberate changes to the raw contract: adding a required field at the top level or inline, narrowing an enum, and tightening a pattern in a shared definition were all reported **incompatible**, but adding a required field or narrowing an enum **inside an `if/then` branch** (the per-message-type rules) was reported **compatible**. Redpanda also has no "check against all versions" endpoint (404), and unlike Confluent it accepts adding an optional property to an open schema.
+
+- Consequence: the raw contract keeps every field's type rules in one flat `body.properties` block (checked by the registry); the per-type branches only list required fields, and `make schemas` adds its own check that no `required` list anywhere gains members. Transitive checking loops over every version explicitly. All six probe changes are now classified correctly.
+- Validation speed: `jsonschema` validated **2,589 messages/s** on one core (a day ≈ 5.5 min; two weeks of backfill ≈ 80 min per rebuild). `fastjsonschema` (the schema compiled to Python) did **52,338 messages/s** with identical verdicts on 50,000 real messages and on all known-bad cases; it now decides, and `jsonschema` only explains rejections.
+- Contract result: 0 rejections in 2,061,370 messages over three days (data-sources.md, Data contracts).
+- Evidence: probe commands and outputs in this session (reproducible with `uv run python -m ingest.stream.schemas --check` after editing a contract); throughput measured on the first 50,000 messages of 2026-11-06 08:00 UTC.
+

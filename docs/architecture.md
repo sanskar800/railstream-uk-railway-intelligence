@@ -71,6 +71,7 @@ The roadmap spec is the source of truth. Changes, with the reason and the date a
 | Reference data includes SMART | SMART is OPTIONAL | Only useful with the TD feed, which is not used | 2026-11-03 |
 | Punctuality "by operator, route and hour" | By operator, location and hour | TRUST carries no route names; invented route groupings would be guesswork | 2026-11-05 |
 | MinIO as local object storage | **SeaweedFS** (S3-compatible, Apache-2.0) | MinIO's community images are no longer published on Docker Hub or Quay, not even old tags (findings F7); every engine talks plain S3, so only one service and an endpoint changed | 2026-11-05 |
+| Avro or Protobuf schemas in the registry | **JSON Schema** in the registry (Redpanda supports it, with compatibility checks) | The raw topic keeps the feed's original JSON byte for byte (replay, bronze); a registered Avro schema would not describe the bytes on the topic, and re-encoding at the bridge would lose fidelity. Compatibility checking needed one addition (findings F15, ADR-006) | 2026-11-09 |
 | Validate gold against official delay attribution | Pattern check against the newest period file, labelled as different dates | Attribution is published ~3 months late (findings F4) | 2026-11-05 |
 
 Additions not in the spec (no change to spec scope): Redpanda Console in a `tools` profile (inspection), a generated "follow one train" walkthrough page, and the Lakekeeper catalog (the spec names no catalog; ADR-003).

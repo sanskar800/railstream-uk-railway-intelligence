@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 log = logging.getLogger("topics")
 
 RAW_TRUST = "raw.trust.movement"
+DLQ_TRUST = "dlq.trust.movement"
 DAY_MS = 24 * 3600 * 1000
 
 
@@ -30,6 +31,9 @@ TOPICS = [
     # because one train always hashes to one partition. Kafka is a replayable buffer, not the
     # archive (the hourly raw files are), so 7 days of retention is plenty.
     TopicSpec(RAW_TRUST, 3, {"retention.ms": str(7 * DAY_MS), "cleanup.policy": "delete"}),
+    # Rejected records with reason and source offset. Low volume, so one partition; kept 30 days
+    # because a rejection is investigated, the contract or parser fixed, and the records replayed.
+    TopicSpec(DLQ_TRUST, 1, {"retention.ms": str(30 * DAY_MS), "cleanup.policy": "delete"}),
 ]
 
 

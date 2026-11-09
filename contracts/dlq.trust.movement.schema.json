@@ -1,0 +1,29 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Dead-letter record (one record of dlq.trust.movement)",
+  "description": "A raw message that failed its contract, with the reason and enough lineage to find, fix and re-process it. The original bytes are kept verbatim in payload.",
+  "type": "object",
+  "required": ["reason", "detail", "source_topic", "source_partition", "source_offset", "payload", "failed_at"],
+  "properties": {
+    "reason": {
+      "description": "Stable category, for the DLQ-rate-by-reason metric.",
+      "enum": ["not_json", "not_an_object", "schema"]
+    },
+    "error_path": {
+      "description": "Where validation failed, e.g. body.actual_timestamp; absent when the payload is not JSON.",
+      "type": "string"
+    },
+    "rule": {
+      "description": "The JSON Schema keyword that failed, e.g. pattern, required, enum.",
+      "type": "string"
+    },
+    "detail": {"description": "Human-readable message, truncated to 500 characters.", "type": "string"},
+    "source_topic": {"type": "string"},
+    "source_partition": {"type": "integer", "minimum": 0},
+    "source_offset": {"type": "integer", "minimum": 0},
+    "received_at": {"description": "From the source record's header (when the bridge received the frame).", "type": "string"},
+    "payload": {"description": "The source record's value, decoded as UTF-8 with replacement.", "type": "string"},
+    "contract_version": {"description": "Schema Registry version of the contract that rejected it.", "type": "integer"},
+    "failed_at": {"type": "string", "format": "date-time"}
+  }
+}

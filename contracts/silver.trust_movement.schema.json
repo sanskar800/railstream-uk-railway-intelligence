@@ -1,0 +1,40 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Cleaned train movement (one row of silver.trust_movement)",
+  "description": "A validated 0003 movement with typed values: UTC timestamps (BST trap resolved, trust/timestamps.py), a signed delay, booleans, trimmed codes, and Kafka lineage. Produced by the Spark silver job (Day 6). Location and operator enrichment are added there as optional fields (a BACKWARD-compatible change).",
+  "type": "object",
+  "required": [
+    "train_id", "event_type", "planned_event_type", "actual_ts", "loc_stanox", "toc_id",
+    "variation_status", "delay_min", "event_source", "is_offroute", "is_correction",
+    "is_terminated", "is_delay_monitoring_point", "msg_queue_ts", "source_partition",
+    "source_offset"
+  ],
+  "properties": {
+    "train_id": {"type": "string", "pattern": "^[0-9A-Z]{10}$"},
+    "event_type": {"enum": ["ARRIVAL", "DEPARTURE"]},
+    "planned_event_type": {"enum": ["ARRIVAL", "DEPARTURE", "DESTINATION"]},
+    "actual_ts": {"description": "UTC.", "type": "string", "format": "date-time"},
+    "planned_ts": {"description": "UTC; working timetable; null when off route.", "type": ["string", "null"], "format": "date-time"},
+    "gbtt_ts": {"description": "UTC; public timetable; null where the train does not call for passengers.", "type": ["string", "null"], "format": "date-time"},
+    "loc_stanox": {"type": "string", "pattern": "^[0-9]{5}$"},
+    "reporting_stanox": {"type": ["string", "null"], "pattern": "^[0-9]{5}$"},
+    "toc_id": {"type": "string", "pattern": "^[0-9]{2}$"},
+    "variation_status": {"enum": ["EARLY", "ON TIME", "LATE", "OFF ROUTE"]},
+    "delay_min": {
+      "description": "Signed minutes against the working timetable: negative = early, from timetable_variation and variation_status. 0 when off route.",
+      "type": "integer"
+    },
+    "event_source": {"enum": ["AUTOMATIC", "MANUAL"]},
+    "is_offroute": {"type": "boolean"},
+    "is_correction": {"type": "boolean"},
+    "is_terminated": {"type": "boolean"},
+    "is_delay_monitoring_point": {"type": "boolean"},
+    "platform": {"description": "Trimmed; null when absent.", "type": ["string", "null"]},
+    "direction": {"enum": ["UP", "DOWN", null]},
+    "msg_queue_ts": {"description": "UTC (true UTC in the feed).", "type": "string", "format": "date-time"},
+    "received_at": {"type": ["string", "null"], "format": "date-time"},
+    "ingest_source": {"enum": ["live", "replay", null]},
+    "source_partition": {"type": "integer", "minimum": 0},
+    "source_offset": {"type": "integer", "minimum": 0}
+  }
+}
