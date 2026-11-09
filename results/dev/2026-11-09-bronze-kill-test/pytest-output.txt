@@ -1,0 +1,11 @@
+============================= test session starts =============================
+platform win32 -- Python 3.12.12, pytest-9.2.0, pluggy-1.7.0
+rootdir: C:\dev\5projects\railstream
+configfile: pyproject.toml
+collected 2 items
+
+tests\integration\test_bronze.py integration: {"table": "bronze_it.t_a7bf057d", "rows": 5000, "distinct_offsets": 5000, "snapshots": 1, "partitions": {"0": {"lo": 0, "hi": 1636, "rows": 1637, "no_gaps": true}, "1": {"lo": 0, "hi": 1651, "rows": 1652, "no_gaps": true}, "2": {"lo": 0, "hi": 1710, "rows": 1711, "no_gaps": true}}}
+.kill test: run 0: SIGKILL after 4 batches; run 1: SIGKILL after 3 batches; run 2: SIGKILL after 3 batches | {"table": "bronze_it.k_b2e9f309", "rows": 40000, "distinct_offsets": 40000, "snapshots": 81, "partitions": {"0": {"lo": 0, "hi": 13352, "rows": 13353, "no_gaps": true}, "1": {"lo": 0, "hi": 13387, "rows": 13388, "no_gaps": true}, "2": {"lo": 0, "hi": 13258, "rows": 13259, "no_gaps": true}}}
+.
+
+======================== 2 passed in 117.19s (0:01:57) ========================

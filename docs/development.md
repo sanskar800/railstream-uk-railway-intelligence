@@ -135,6 +135,7 @@ Times are UTC (a timestamp without an offset is read as UTC). Replaying a window
 
 - `make setup`: install from `uv.lock`.
 - `make lint` / `make format`: ruff.
+- `make it`: integration tests against the running stack (`make up`, then `make stream` once to build the Spark image). Bronze: N messages in = N rows out, and a kill test (three SIGKILLs mid-run, restart from the checkpoint, no duplicates or loss). Each test uses its own topic, table and checkpoint; about 2 minutes. Not part of `make test` or CI (needs Docker and the stack).
 - The project is an application, not a library (`[tool.uv] package = false`); modules run with `python -m` from the repo root.
 - `make schemas`: register `contracts/` in the Schema Registry (also part of `make up`). It first checks every contract against all registered versions (BACKWARD_TRANSITIVE plus the required-field guard, ADR-006) and registers nothing that fails. `uv run python -m ingest.stream.schemas --check` only checks.
 - Changing a contract locally: `scripts/check_contracts.sh <base-commit>` against an **empty** registry checks the working tree (uncommitted edits are kept). A scratch registry: `docker run -d --rm --name rp-scratch -p 127.0.0.1:28081:8081 redpandadata/redpanda:v26.1.20 redpanda start --mode dev-container --smp 1 --schema-registry-addr 0.0.0.0:8081`, then `SCHEMA_REGISTRY_URL=http://127.0.0.1:28081`.

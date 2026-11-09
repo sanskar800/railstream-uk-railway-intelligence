@@ -4,7 +4,7 @@
 # .env is optional for the local stack: every variable it can set has a local default.
 COMPOSE = docker compose $(if $(wildcard .env),--env-file .env,) -f infra/compose/compose.yaml
 
-.PHONY: help setup test lint format live replay topics schemas stream stream-logs pull-raw up down ps logs tools stats
+.PHONY: help setup test it lint format live replay topics schemas stream stream-logs pull-raw up down ps logs tools stats
 
 help:  ## List targets
 	@uv run python -c "import re; [print(f\"{m[0]:<12} {m[1]}\") for m in re.findall(r\"^([a-z-]+):.*## (.*)$$\", open(\"Makefile\").read(), re.M)]"
@@ -14,6 +14,9 @@ setup:  ## Create .venv and install exact versions from uv.lock
 
 test:  ## Run unit tests (no network or Docker needed)
 	uv run pytest
+
+it:  ## Integration tests against the running stack (make up; Spark image from make stream)
+	uv run pytest -m integration -s tests/integration
 
 live:  ## Live bridge: own subscription -> data/raw/trust-live + Kafka (needs `make up`; Ctrl+C stops)
 	uv run python -m ingest.stomp_bridge --subscription railstream-live --out data/raw/trust-live --kafka 127.0.0.1:19092

@@ -126,3 +126,11 @@ First run of the bronze job (Spark 4.1.4, Iceberg 1.12.0) from offset 0 while th
 - Spark's console progress bar (carriage returns) glued log lines together and hid output from line filters; disabled for jobs.
 - Evidence: bronze job log 2026-11-09 13:56–13:58 UTC; verification queries in this session (reproducible: `SELECT kafka_partition, min(kafka_offset), max(kafka_offset), count(*) FROM bronze.trust_movement GROUP BY 1`).
 
+## F17. Killing the bronze job mid-batch three times caused no duplicates and no loss (2026-11-09)
+
+Integration test (`make it`), each run on its own topic, table and checkpoint: 5,000 synthetic TRUST messages in, **5,000 rows and 5,000 distinct (partition, offset) pairs** out, offsets contiguous from 0 in all three partitions. Kill test: 40,000 messages processed in batches of 500; the job was **killed with SIGKILL three times** (after 4, 3 and 3 committed batches, then at a random moment inside the next batch) and restarted from the same checkpoint, then run to completion: **40,000 rows, 40,000 distinct offsets, no gaps**; 81 snapshots (80 full batches plus a final partial one), so no interrupted batch left an extra commit.
+
+- Consequence: the spec's recovery claim holds for bronze: checkpointed offsets plus Iceberg's batch-id check make a re-run batch a no-op. The silver job (stateful dedupe) gets its own kill test on Day 13.
+- A first version of the kill test used fixed 25–40 s timers and the job finished before the first kill; the test refused to pass with zero kills. Kills are now timed from the job's own committed-batch log.
+- Evidence: `results/dev/2026-11-09-bronze-kill-test/pytest-output.txt`.
+

@@ -30,8 +30,8 @@ log = logging.getLogger("bronze")
 TOPIC = "raw.trust.movement"
 TABLE = "bronze.trust_movement"
 
-DDL = f"""
-CREATE TABLE IF NOT EXISTS {TABLE} (
+DDL = """
+CREATE TABLE IF NOT EXISTS {table} (
     kafka_topic     STRING    COMMENT 'Source topic',
     kafka_partition INT       COMMENT 'Source partition; with kafka_offset, unique per row',
     kafka_offset    BIGINT    COMMENT 'Source offset',
@@ -97,16 +97,24 @@ class ProgressLogger(StreamingQueryListener):
         log.info("query terminated%s", f": {event.exception}" if event.exception else "")
 
 
-def start(spark: SparkSession, available_now: bool, trigger: str, checkpoint: str):
-    spark.sql("CREATE NAMESPACE IF NOT EXISTS bronze")
-    spark.sql(DDL)
+def start(
+    spark: SparkSession,
+    available_now: bool,
+    trigger: str,
+    checkpoint: str,
+    topic: str = TOPIC,
+    table: str = TABLE,
+    max_offsets_per_trigger: int = 200_000,
+):
+    spark.sql(f"CREATE NAMESPACE IF NOT EXISTS {table.split('.')[0]}")
+    spark.sql(DDL.format(table=table))
     kafka = (
         spark.readStream.format("kafka")
         .option("kafka.bootstrap.servers", os.environ.get("KAFKA_BOOTSTRAP", "redpanda:9092"))
-        .option("subscribe", TOPIC)
+        .option("subscribe", topic)
         .option("startingOffsets", "earliest")  # first run only; afterwards the checkpoint rules
         .option("includeHeaders", "true")
-        .option("maxOffsetsPerTrigger", 200_000)  # bounds a backfill batch's memory
+        .option("maxOffsetsPerTrigger", max_offsets_per_trigger)  # bounds a batch's memory
         # failOnDataLoss stays true (default): if offsets expired before being read (laptop off
         # longer than Kafka's 7-day retention) the query stops loudly; refill by replay.
         .load()
@@ -117,14 +125,14 @@ def start(spark: SparkSession, available_now: bool, trigger: str, checkpoint: st
         .writeStream.format("iceberg")
         .outputMode("append")
         .option("checkpointLocation", checkpoint)
-        .queryName("bronze_trust_movement")
+        .queryName(table.replace(".", "_"))
     )
     writer = (
         writer.trigger(availableNow=True)
         if available_now
         else writer.trigger(processingTime=trigger)
     )
-    return writer.toTable(TABLE)
+    return writer.toTable(table)
 
 
 def main() -> None:
@@ -141,14 +149,25 @@ def main() -> None:
             os.environ.get("CHECKPOINT_ROOT", "/checkpoints"), "bronze_trust_movement"
         ),
     )
-    args = parser.parse_args()  # fmt: skip
+    parser.add_argument("--topic", default=TOPIC)
+    parser.add_argument("--table", default=TABLE)
+    parser.add_argument("--max-offsets-per-trigger", type=int, default=200_000)
+    args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     spark = build_session("bronze_trust_movement")
     spark.sparkContext.setLogLevel("WARN")
     spark.streams.addListener(ProgressLogger())
-    query = start(spark, args.available_now, args.trigger, args.checkpoint)
-    log.info("writing %s -> lake.%s; checkpoint %s", TOPIC, TABLE, args.checkpoint)
+    query = start(
+        spark,
+        args.available_now,
+        args.trigger,
+        args.checkpoint,
+        args.topic,
+        args.table,
+        args.max_offsets_per_trigger,
+    )
+    log.info("writing %s -> lake.%s; checkpoint %s", args.topic, args.table, args.checkpoint)
     signal.signal(signal.SIGTERM, lambda *_: query.stop())  # docker stop: end cleanly
     query.awaitTermination()
 
