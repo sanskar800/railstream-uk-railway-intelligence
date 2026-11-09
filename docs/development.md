@@ -134,3 +134,15 @@ Times are UTC (a timestamp without an offset is read as UTC). Replaying a window
 - `make setup`: install from `uv.lock`.
 - `make lint` / `make format`: ruff.
 - The project is an application, not a library (`[tool.uv] package = false`); modules run with `python -m` from the repo root.
+- `make schemas`: register `contracts/` in the Schema Registry (also part of `make up`). It first checks every contract against all registered versions (BACKWARD_TRANSITIVE plus the required-field guard, ADR-006) and registers nothing that fails. `uv run python -m ingest.stream.schemas --check` only checks.
+- Changing a contract locally: `scripts/check_contracts.sh <base-commit>` against an **empty** registry checks the working tree (uncommitted edits are kept). A scratch registry: `docker run -d --rm --name rp-scratch -p 127.0.0.1:28081:8081 redpandadata/redpanda:v26.1.20 redpanda start --mode dev-container --smp 1 --schema-registry-addr 0.0.0.0:8081`, then `SCHEMA_REGISTRY_URL=http://127.0.0.1:28081`.
+
+## 6. Continuous integration
+
+`.github/workflows/ci.yml` runs on every push to `main` and every pull request:
+
+| Job | What |
+|---|---|
+| Lint and unit tests | `uv sync --locked`, `make lint`, `make test` (no network or Docker needed by the tests) |
+| Contract compatibility | Starts an empty Redpanda (same image as the local stack), registers the base commit's contracts, checks the changed ones (`scripts/check_contracts.sh`); an incompatible change fails the job |
+

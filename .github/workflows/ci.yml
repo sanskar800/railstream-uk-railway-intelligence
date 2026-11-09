@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Lint and unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.9.9"
+          enable-cache: true
+      - run: uv sync --locked
+      - run: make lint
+      - run: make test
+
+  contracts:
+    name: Contract compatibility (ADR-006)
+    runs-on: ubuntu-latest
+    env:
+      SCHEMA_REGISTRY_URL: http://127.0.0.1:18081
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # the base commit's contracts are read from history
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.9.9"
+          enable-cache: true
+      - run: uv sync --locked
+      - name: Start an empty Schema Registry (same Redpanda image as the local stack)
+        run: |
+          docker run -d --name redpanda -p 127.0.0.1:18081:8081 redpandadata/redpanda:v26.1.20 \
+            redpanda start --mode dev-container --smp 1 --schema-registry-addr 0.0.0.0:8081
+          for i in $(seq 60); do curl -fs "$SCHEMA_REGISTRY_URL/subjects" && exit 0; sleep 2; done
+          docker logs redpanda; exit 1
+      - name: Check contracts against the base commit
+        run: bash scripts/check_contracts.sh "${{ github.event.pull_request.base.sha || github.event.before }}"
