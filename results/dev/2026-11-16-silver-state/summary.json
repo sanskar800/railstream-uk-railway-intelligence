@@ -1,0 +1,29 @@
+{
+    "namespace":  "silver_state_5e32ea88",
+    "checkpoint":  "/checkpoints/state_5e32ea88",
+    "current_rows":  5,
+    "revision_rows":  6,
+    "synthetic_watermark_seconds":  10,
+    "dropped_duplicate_rows":  2,
+    "evicted_state_rows":  1,
+    "watermarks":  [
+                       "1970-01-01T00:00:00.000Z",
+                       "2026-11-16T11:59:51.000Z",
+                       "2026-11-16T11:59:51.000Z",
+                       "2026-11-16T12:00:21.000Z",
+                       "2026-11-16T12:00:21.000Z"
+                   ],
+    "verified":  [
+                     "bounded_live_dedupe",
+                     "state_eviction",
+                     "late_correction_preserved",
+                     "old_replay_after_eviction",
+                     "future_clock_guard",
+                     "mixed_live_history",
+                     "unknown_location_preserved",
+                     "duplicate_corpus_keys_collapsed",
+                     "reference_load_idempotent",
+                     "reference_refresh_on_replay"
+                 ],
+    "cleanup":  "isolated tables/topic/checkpoint retained; no deletes or kills"
+}

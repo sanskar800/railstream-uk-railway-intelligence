@@ -28,7 +28,7 @@ def build_session(app_name: str) -> SparkSession:
         .config("spark.driver.memory", env("SPARK_DRIVER_MEMORY", "1g"))
         .config("spark.jars", jars)
         .config("spark.sql.session.timeZone", "UTC")
-        .config("spark.sql.shuffle.partitions", "4")  # default 200 is for clusters
+        .config("spark.sql.shuffle.partitions", env("SPARK_SHUFFLE_PARTITIONS", "4"))
         .config("spark.ui.port", "4040")
         .config("spark.ui.showConsoleProgress", "false")  # progress bars garble logs
         .config(

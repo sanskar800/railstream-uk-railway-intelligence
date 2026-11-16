@@ -51,8 +51,8 @@ unsupported correlation across those changes is inferred.
   durable merges tolerate repetition and Kafka sinks may redeliver.
 - Exactly one processor/checkpoint owns a silver namespace. Concurrent independent
   writers and mutation of the source bronze history are not supported here.
-- This establishes durable correctness; watermarked state and CORPUS enrichment
-  remain separate Day 6 steps. No event-time cutoff is applied yet.
+- This establishes durable correctness. ADR-009 subsequently adds guarded
+  watermarked state and CORPUS enrichment; history bypasses the live watermark.
 - Verification: the isolated Spark/Kafka scenario updates one call through four
   revisions, restarts its stream checkpoint three times, flags an equal-time
   conflict, preserves newer data during old replay and recovers an injected reject

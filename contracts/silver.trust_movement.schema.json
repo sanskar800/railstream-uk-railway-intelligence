@@ -35,6 +35,16 @@
     "received_at": {"type": ["string", "null"], "format": "date-time"},
     "ingest_source": {"enum": ["live", "replay", null]},
     "source_partition": {"type": "integer", "minimum": 0},
-    "source_offset": {"type": "integer", "minimum": 0}
+    "source_offset": {"type": "integer", "minimum": 0},
+    "event_key": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "revision_id": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "identity_unresolved": {"type": "boolean"},
+    "revision_conflict": {"type": "boolean"},
+    "location_name": {"type": ["string", "null"]},
+    "crs": {"type": ["string", "null"]},
+    "tiploc": {"type": ["string", "null"]},
+    "location_matched": {"type": ["boolean", "null"]},
+    "location_reference_version": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+    "processing_route": {"enum": ["live", "replay", "correction", "timestamp_review", "future", "late", null]}
   }
 }

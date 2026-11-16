@@ -2,7 +2,8 @@
 
 Each micro-batch is idempotently merged before its checkpoint is committed.
 Kafka DLQ publication is at least once, keyed by the durable reject identity.
-Watermarked hot-path dedupe and CORPUS enrichment are subsequent Day 6 steps.
+Recent live duplicates use bounded watermark state; late reports bypass that
+state and use durable revision identity. A versioned CORPUS left join adds names.
 """
 
 from __future__ import annotations
@@ -13,6 +14,7 @@ import os
 import re
 import signal
 
+from pyspark import StorageLevel
 from pyspark.sql import functions as F
 from pyspark.sql import types as T
 from pyspark.sql.window import Window
@@ -58,6 +60,12 @@ MOVEMENT_SCHEMA = T.StructType(
             ("revision_id", T.StringType()),
             ("identity_unresolved", T.BooleanType()),
             ("revision_conflict", T.BooleanType()),
+            ("location_name", T.StringType()),
+            ("crs", T.StringType()),
+            ("tiploc", T.StringType()),
+            ("location_matched", T.BooleanType()),
+            ("location_reference_version", T.StringType()),
+            ("processing_route", T.StringType()),
         ]
     ]
 )
@@ -91,6 +99,13 @@ def create_tables(spark, namespace):
             f"CREATE TABLE IF NOT EXISTS {namespace}.{name} ({columns}) USING iceberg "
             "PARTITIONED BY (days(actual_ts)) TBLPROPERTIES ('format-version'='2')"
         )
+        existing = set(spark.table(f"{namespace}.{name}").columns)
+        for field in MOVEMENT_SCHEMA:
+            if field.name not in existing:
+                spark.sql(
+                    f"ALTER TABLE {namespace}.{name} ADD COLUMN "
+                    f"{field.name} {field.dataType.simpleString()}"
+                )
     spark.sql(
         f"CREATE TABLE IF NOT EXISTS {namespace}.rejected_messages "
         "(record_id STRING, value STRING) USING iceberg"
@@ -106,7 +121,7 @@ def merge_new(spark, frame, table, key):
     )
 
 
-def merge_current(spark, movements, namespace):
+def merge_current(spark, movements, namespace, locations=None):
     # Rank with the existing current row too, so old replay never overwrites a newer revision.
     table = f"{namespace}.trust_movement"
     spark.catalog.refreshTable(table)
@@ -133,13 +148,19 @@ def merge_current(spark, movements, namespace):
         .drop("tie", "prior_conflict")
     )
     # Materialize before MERGE: chosen reads the target table. The single silver writer owns it.
-    chosen = chosen.localCheckpoint(eager=True)
+    if locations is not None:
+        from streaming.locations import enrich
+
+        chosen = enrich(chosen, locations)
+    chosen = chosen.localCheckpoint(eager=True, storageLevel=StorageLevel.DISK_ONLY)
     try:
         chosen.createOrReplaceTempView("silver_current")
         spark.sql(
             f"MERGE INTO {table} t USING silver_current s ON t.event_key=s.event_key "
             "WHEN MATCHED AND (s.revision_id <> t.revision_id OR "
-            "s.revision_conflict <> t.revision_conflict) THEN UPDATE SET * "
+            "s.revision_conflict <> t.revision_conflict OR "
+            "NOT(s.location_reference_version <=> t.location_reference_version)) "
+            "THEN UPDATE SET * "
             "WHEN NOT MATCHED THEN INSERT *"
         )
     finally:
@@ -165,13 +186,35 @@ def process_batch(batch, batch_id, *, namespace="silver", dlq_topic="dlq.trust.m
     classified = spark.createDataFrame(
         batch.rdd.map(lambda row: classify(row.asDict(recursive=True))),
         CLASSIFIED_SCHEMA,
-    ).persist()
+    )
+    process_classified_batch(classified, batch_id, namespace=namespace, dlq_topic=dlq_topic)
+
+
+def process_classified_batch(
+    classified,
+    batch_id,
+    *,
+    namespace="silver",
+    dlq_topic="dlq.trust.movement",
+    reference_table=None,
+):
+    spark = classified.sparkSession
+    classified = classified.persist(StorageLevel.DISK_ONLY)
     try:
         counts = {r["status"]: r["count"] for r in classified.groupBy("status").count().collect()}
         if counts.get("movement"):
             movements = classified.where("status='movement'").select("movement.*")
+            if "_route" in classified.columns:
+                movements = classified.where("status='movement'").select("movement.*", "_route")
+                movements = movements.withColumn("processing_route", F.col("_route")).drop("_route")
+            locations = None
+            if reference_table:
+                from streaming.locations import enrich, reference_snapshot
+
+                locations = reference_snapshot(spark, reference_table)
+                movements = enrich(movements, locations)
             merge_new(spark, movements, f"{namespace}.movement_revisions", "revision_id")
-            merge_current(spark, movements, namespace)
+            merge_current(spark, movements, namespace, locations)
         if counts.get("rejected"):
             rejects = classified.where("status='rejected'").select("reject.*")
             merge_new(spark, rejects, f"{namespace}.rejected_messages", "record_id")
@@ -184,6 +227,12 @@ def process_batch(batch, batch_id, *, namespace="silver", dlq_topic="dlq.trust.m
             )
             publish_rejects(durable, dlq_topic)
         log.info("batch %s: %s", batch_id, counts)
+        if "_route" in classified.columns:
+            log.info(
+                "batch %s routes: %s",
+                batch_id,
+                {r["_route"]: r["count"] for r in classified.groupBy("_route").count().collect()},
+            )
     finally:
         classified.unpersist()
 
@@ -192,7 +241,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--source", default="bronze.trust_movement", type=identifier)
     parser.add_argument("--namespace", default="silver", type=identifier)
-    parser.add_argument("--checkpoint", default="/checkpoints/silver_trust_movement")
+    parser.add_argument("--checkpoint", default="/checkpoints/silver_trust_movement_v2")
+    parser.add_argument("--reference-table", default="ref.locations", type=identifier)
+    parser.add_argument("--watermark-seconds", type=int, default=900)
     parser.add_argument("--trigger", default="1 minute")
     parser.add_argument("--available-now", action="store_true")
     args = parser.parse_args()
@@ -201,9 +252,19 @@ def main():
     spark.sparkContext.setLogLevel("WARN")
     spark.streams.addListener(ProgressLogger())
     create_tables(spark, args.namespace)
+    if not spark.catalog.tableExists(args.reference_table):
+        raise ValueError("load CORPUS first with make load-corpus")
+    from streaming.watermarks import prepare_stream
+
     source = spark.readStream.table(args.source)
-    writer = source.writeStream.option("checkpointLocation", args.checkpoint).foreachBatch(
-        lambda batch, bid: process_batch(batch, bid, namespace=args.namespace)
+    routed = prepare_stream(source, args.watermark_seconds)
+    writer = routed.writeStream.option("checkpointLocation", args.checkpoint).foreachBatch(
+        lambda batch, bid: process_classified_batch(
+            batch,
+            bid,
+            namespace=args.namespace,
+            reference_table=args.reference_table,
+        )
     )
     writer = (
         writer.trigger(availableNow=True)

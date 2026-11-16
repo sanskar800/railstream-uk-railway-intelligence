@@ -80,6 +80,27 @@ TRUST records what happened, not why, so reactionary delay is an **inference**. 
 - Metrics are computed per location (STANOX). Each STANOX maps to exactly one CORPUS row (rule fixed on Day 6; findings F3).
 - **City groups** (`ref.city_groups`, a small hand-maintained seed: CRS → city) let a controller ask about "London" or "Birmingham". v1: London = its 13 main termini (EUS, KGX, STP, PAD, LST, WAT, VIC, LBG, CHX, FST, MYB, CST, BFR); Birmingham = BHM, BMO, BSW, BHI; other cities their main station(s). Junctions and freight points belong to no city.
 
+## 10. Silver late-event and reference policy
+
+The 15-minute watermark limits recent live duplicate state, not accepted history.
+Only ordinary live reports from the last 7.5 minutes, with an actual timestamp
+no later than Spark's batch clock, enter the stateful branch. Replay, corrections,
+timestamp-review records, future reports and older reports bypass that branch
+and still reach durable revision/current MERGEs. `processing_route` and per-batch
+route counts expose those decisions. A far-future record cannot advance the
+live watermark; replay after state eviction cannot add another current call.
+
+Correction precedence uses source queue time, never replay receipt time or Kafka
+offset. Equal-time conflicting revisions remain flagged, and off-route identities
+remain unresolved. These quality flags must be considered by later gold models;
+passing through silver does not make a report suitable for every metric.
+
+CORPUS joins preserve unknown locations with `location_matched=false` and null
+names. Every enriched row records its reference version. Refreshing CORPUS affects
+subsequent processing/replay of current rows; stored revision enrichment is
+immutable. See [silver-design.md](silver-design.md) and ADR-009 for details.
+
 ## Change log
 
 - v1 (2026-11-05): first definitions.
+- 2026-11-16: implemented late-event bypass and reference-version provenance.

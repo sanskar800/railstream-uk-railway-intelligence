@@ -37,8 +37,11 @@ Details of each layer's schema: metrics.md (definitions) and data-sources.md (in
 Current implementation (2026-11-16): bronze capture and revision-aware silver
 writes are implemented. Silver retains distinct revisions and current planned
 calls (ADR-008); Kafka DLQ publication is at least once with stable source keys.
-Watermarked state, reference enrichment, gold, orchestration and serving remain
-planned. The diagram includes those later stages.
+Guarded watermarked state and a versioned CORPUS left join are implemented
+(ADR-009). Gold, orchestration and serving remain planned. Actual silver tables
+are `silver.trust_movement`, `silver.movement_revisions` and
+`silver.rejected_messages`; activations and cancellations remain in bronze.
+The diagram includes later stages.
 
 ## 3. Components
 

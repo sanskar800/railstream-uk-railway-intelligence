@@ -176,4 +176,32 @@ The real bronze backlog then produced 107,222 typed movements and 4,212 other va
 TRUST messages in the silver job's first batch. Container memory at the sampled
 point was 1.398 GiB / 1.5 GiB: near the cap, not a sustained-memory measurement.
 Re-check batch sizing and heap before adding stateful watermark processing.
-Watermark and CORPUS enrichment are still pending; no late-event cutoff is applied.
+At this point watermark and CORPUS enrichment were pending; F19 records completion.
+
+## F19. Guarded watermark preserves history; CORPUS enriches without multiplying calls (2026-11-16)
+
+The focused state scenario ran the real Spark state operator with a synthetic
+ten-second horizon and batch-clock jumps. It dropped two duplicate live reports
+and evicted one state entry. Old replay, a late correction, mixed live/history,
+future timestamps, checkpoint restarts and reference refresh all passed. Unknown
+STANOX values remained present with null names and a false match flag. Duplicate
+CORPUS keys collapsed deterministically; loading the same reference was idempotent.
+
+The downloaded reference loaded 11,118 selected STANOX locations. Rereading the
+existing bronze archive produced 102,574 current calls with 102,574 distinct keys
+and 104,934 distinct revisions. All current calls in this archive matched CORPUS;
+that is not a guarantee that every future location will match. Oxford, Birmingham
+New Street, Euston and Paddington were observed with their real names and CRS codes.
+
+The real backlog's watermark branch was idle because the reports were historical;
+the synthetic scenario verifies live state behavior. Spark's union query reports
+two source scans (222,868 input rows for 111,434 physical records), so use sink
+status/route counts for business volume, not its generic input rate.
+
+The smaller heap and disk-backed caches still sampled up to 1.462 GiB, leaving
+too little headroom under the old 1.5 GiB cap. Silver now has a 2 GiB cap within
+the existing Docker budget (ADR-009). No OOM or automatic restart was observed;
+this is sampled development evidence, not sustained capacity proof. Larger
+backlogs and abrupt-kill silver recovery remain later verification work.
+
+Generated summaries and memory samples: `results/dev/2026-11-16-silver-state/`.

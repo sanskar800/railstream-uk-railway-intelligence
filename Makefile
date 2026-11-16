@@ -4,7 +4,7 @@
 # .env is optional for the local stack: every variable it can set has a local default.
 COMPOSE = docker compose $(if $(wildcard .env),--env-file .env,) -f infra/compose/compose.yaml
 
-.PHONY: help setup test it lint format live replay topics schemas stream stream-logs silver silver-logs pull-raw up down ps logs tools stats
+.PHONY: help setup test it lint format live replay topics schemas stream stream-logs silver silver-logs load-corpus pull-raw up down ps logs tools stats
 
 help:  ## List targets
 	@uv run python -c "import re; [print(f\"{m[0]:<12} {m[1]}\") for m in re.findall(r\"^([a-z-]+):.*## (.*)$$\", open(\"Makefile\").read(), re.M)]"
@@ -57,8 +57,11 @@ stream:  ## Start the Spark bronze job (builds the image; Spark UI on http://loc
 stream-logs:  ## Follow the Spark job's per-batch log
 	$(COMPOSE) --profile stream logs -f spark-bronze
 
-silver:  ## Start silver after make up and make stream (Spark UI on http://localhost:4041)
+silver:  ## Start silver after make up, make stream and make load-corpus (UI on port 4041)
 	$(COMPOSE) --profile stream up -d --build spark-silver
+
+load-corpus:  ## Load the downloaded CORPUS as an immutable reference version (needs core stack)
+	$(COMPOSE) --profile stream run --rm --no-deps -v "$(CURDIR)/data/reference:/reference:ro" spark-silver python -m streaming.locations /reference/CORPUSExtract.json.gz
 
 silver-logs:  ## Follow silver batch counts (movements / rejects / other TRUST types)
 	$(COMPOSE) --profile stream logs -f spark-silver

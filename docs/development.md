@@ -154,20 +154,36 @@ Times are UTC (a timestamp without an offset is read as UTC). Replaying a window
 | Contract compatibility | Starts an empty Redpanda (same image as the local stack), registers the base commit's contracts, checks the changed ones (`scripts/check_contracts.sh`); an incompatible change fails the job |
 
 
-## 7. Silver processor (Day 6, in progress)
+## 7. Silver processor (Day 6)
 
-After bronze exists (`make up`, then `make stream`), `make silver` starts the
+After bronze exists (`make up`, then `make stream`), build the Spark image and
+run `make load-corpus` using `data/reference/CORPUSExtract.json.gz`.
+Then `make silver` starts the
 revision-aware processor and `make silver-logs` shows movements/rejects/other counts.
-Its Spark UI is localhost:4041; its checkpoint is `/checkpoints/silver_trust_movement`
+Its Spark UI is localhost:4041; its checkpoint is `/checkpoints/silver_trust_movement_v2`
 in the existing checkpoint volume. One writer owns a namespace/checkpoint.
 
 Tables: `silver.trust_movement` (latest planned-call row),
 `silver.movement_revisions` (distinct revision history),
 `silver.rejected_messages` (durable rejects published to Kafka's DLQ). Equal-time
 conflicts and off-route unresolved identities are explicit flags, not hidden guesses.
-See `silver-design.md` and ADR-008 for guarantees and limitations. State watermarking
-and CORPUS enrichment remain pending. Initial backlog memory was sampled near
-1.4 GiB of the 1.5 GiB cap; measure again before adding state.
+See `silver-design.md` and ADRs 008/009 for guarantees and limitations. A guarded
+15-minute live watermark bounds duplicate state; history/corrections bypass it.
+The one-row-per-STANOX left join adds names, CRS, TIPLOC, a match flag and reference
+version. The loader retains immutable versions and is safe to repeat. Loading a
+new reference refreshes affected current rows on processing or replay, not all
+historical rows immediately.
+
+The stateful query uses a new v2 checkpoint because its plan differs from v1.
+Keep v1 intact; v2 rereads retained bronze, with durable MERGEs preventing extra
+current/revision rows. Kafka DLQ copies may repeat under their stable keys.
+The silver heap is 768 MiB, shuffle partitions two, container cap 2 GiB;
+batch materialization uses disk to leave room for Python and native memory.
+The earlier stateless backlog was sampled near 1.4 GiB. The new plan sampled
+1.462 GiB during the real reread, so its original 1.5 GiB cap was raised. Core,
+tools, bronze and silver limits total 6 GiB of Docker's ~7.6 GiB; add later
+profiles only after measuring their budget. Runtime measurements
+for the updated job are recorded under `results/dev/2026-11-16-silver-state/`.
 
 Focused integration test: `uv run pytest -m integration -s tests/integration/test_silver.py`.
 It creates isolated retained tables/topic/checkpoint, with no drops or kills.

@@ -1,0 +1,51 @@
+{
+    "current_rows":  102574,
+    "distinct_event_keys":  102574,
+    "matched_rows":  102574,
+    "unmatched_rows":  0,
+    "unenriched_rows":  0,
+    "revision_rows":  104934,
+    "distinct_revisions":  104934,
+    "reference_locations":  11118,
+    "routes":  [
+                   {
+                       "processing_route":  "replay",
+                       "count":  50846
+                   },
+                   {
+                       "processing_route":  "correction",
+                       "count":  19
+                   },
+                   {
+                       "processing_route":  "late",
+                       "count":  51709
+                   }
+               ],
+    "sample_locations":  [
+                             {
+                                 "loc_stanox":  "65630",
+                                 "location_name":  "BIRMINGHAM NEW STREET",
+                                 "crs":  "BHM",
+                                 "tiploc":  "BHAMNWS"
+                             },
+                             {
+                                 "loc_stanox":  "72410",
+                                 "location_name":  "EUSTON LONDON",
+                                 "crs":  "EUS",
+                                 "tiploc":  "EUSTON"
+                             },
+                             {
+                                 "loc_stanox":  "74446",
+                                 "location_name":  "OXFORD",
+                                 "crs":  "OXF",
+                                 "tiploc":  "OXFD"
+                             },
+                             {
+                                 "loc_stanox":  "73000",
+                                 "location_name":  "PADDINGTON LONDON",
+                                 "crs":  "PAD",
+                                 "tiploc":  "PADTON"
+                             }
+                         ],
+    "observed_at_utc":  "2026-11-16T13:23:39.465568+00:00"
+}

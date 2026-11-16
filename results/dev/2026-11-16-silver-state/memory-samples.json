@@ -1,0 +1,317 @@
+{
+    "samples":  {
+                    "value":  [
+                                  {
+                                      "time_utc":  "2026-11-16T13:19:21.3534212Z",
+                                      "stats":  {
+                                                    "BlockIO":  "14.8MB / 128MB",
+                                                    "CPUPerc":  "198.60%",
+                                                    "Container":  "railstream-spark-silver-1",
+                                                    "ID":  "92f9970e0c2d",
+                                                    "MemPerc":  "32.77%",
+                                                    "MemUsage":  "503.4MiB / 1.5GiB",
+                                                    "Name":  "railstream-spark-silver-1",
+                                                    "NetIO":  "779kB / 342kB",
+                                                    "PIDs":  "79"
+                                                }
+                                  },
+                                  {
+                                      "time_utc":  "2026-11-16T13:19:25.6204781Z",
+                                      "stats":  {
+                                                    "BlockIO":  "14.9MB / 128MB",
+                                                    "CPUPerc":  "287.57%",
+                                                    "Container":  "railstream-spark-silver-1",
+                                                    "ID":  "92f9970e0c2d",
+                                                    "MemPerc":  "47.29%",
+                                                    "MemUsage":  "726.4MiB / 1.5GiB",
+                                                    "Name":  "railstream-spark-silver-1",
+                                                    "NetIO":  "3.84MB / 781kB",
+                                                    "PIDs":  "89"
+                                                }
+                                  },
+                                  {
+                                      "time_utc":  "2026-11-16T13:19:28.6862733Z",
+                                      "stats":  {
+                                                    "BlockIO":  "14.9MB / 128MB",
+                                                    "CPUPerc":  "112.95%",
+                                                    "Container":  "railstream-spark-silver-1",
+                                                    "ID":  "92f9970e0c2d",
+                                                    "MemPerc":  "52.56%",
+                                                    "MemUsage":  "807.3MiB / 1.5GiB",
+                                                    "Name":  "railstream-spark-silver-1",
+                                                    "NetIO":  "6.85MB / 812kB",
+                                                    "PIDs":  "88"
+                                                }
+                                  },
+                                  {
+                                      "time_utc":  "2026-11-16T13:19:31.7412658Z",
+                                      "stats":  {
+                                                    "BlockIO":  "14.9MB / 128MB",
+                                                    "CPUPerc":  "108.81%",
+                                                    "Container":  "railstream-spark-silver-1",
+                                                    "ID":  "92f9970e0c2d",
+                                                    "MemPerc":  "52.07%",
+                                                    "MemUsage":  "799.9MiB / 1.5GiB",
+                                                    "Name":  "railstream-spark-silver-1",
+                                                    "NetIO":  "6.85MB / 812kB",
+                                                    "PIDs":  "85"
+                                                }
+                                  },
+                                  {
+                                      "time_utc":  "2026-11-16T13:19:35.5039643Z",
+                                      "stats":  {
+                                                    "BlockIO":  "14.9MB / 128MB",
+                                                    "CPUPerc":  "108.54%",
+                                                    "Container":  "railstream-spark-silver-1",
+                                                    "ID":  "92f9970e0c2d",
+                                                    "MemPerc":  "51.62%",
+                                                    "MemUsage":  "792.8MiB / 1.5GiB",
+                                                    "Name":  "railstream-spark-silver-1",
+                                                    "NetIO":  "7.99MB / 819kB",
+                                                    "PIDs":  "85"
+                                                }
+                                  },
+                                  {
+                                      "time_utc":  "2026-11-16T13:19:38.5704456Z",
+                                      "stats":  {
+                                                    "BlockIO":  "14.9MB / 128MB",
+                                                    "CPUPerc":  "119.29%",
+                                                    "Container":  "railstream-spark-silver-1",
+                                                    "ID":  "92f9970e0c2d",
+                                                    "MemPerc":  "51.68%",
+                                                    "MemUsage":  "793.9MiB / 1.5GiB",
+                                                    "Name":  "railstream-spark-silver-1",
+                                                    "NetIO":  "8.93MB / 879kB",
+                                                    "PIDs":  "88"
+                                                }
+                                  },
+                                  {
+                                      "time_utc":  "2026-11-16T13:19:41.6716981Z",
+                                      "stats":  {
+                                                    "BlockIO":  "14.9MB / 128MB",
+                                                    "CPUPerc":  "377.34%",
+                                                    "Container":  "railstream-spark-silver-1",
+                                                    "ID":  "92f9970e0c2d",
+                                                    "MemPerc":  "55.80%",
+                                                    "MemUsage":  "857.1MiB / 1.5GiB",
+                                                    "Name":  "railstream-spark-silver-1",
+                                                    "NetIO":  "12.3MB / 922kB",
+                                                    "PIDs":  "114"
+                                                }
+                                  },
+                                  {
+                                      "time_utc":  "2026-11-16T13:19:45.5246029Z",
+                                      "stats":  {
+                                                    "BlockIO":  "14.9MB / 128MB",
+                                                    "CPUPerc":  "125.12%",
+                                                    "Container":  "railstream-spark-silver-1",
+                                                    "ID":  "92f9970e0c2d",
+                                                    "MemPerc":  "58.60%",
+                                                    "MemUsage":  "900MiB / 1.5GiB",
+                                                    "Name":  "railstream-spark-silver-1",
+                                                    "NetIO":  "12.3MB / 922kB",
+                                                    "PIDs":  "108"
+                                                }
+                                  },
+                                  {
+                                      "time_utc":  "2026-11-16T13:19:48.6074726Z",
+                                      "stats":  {
+                                                    "BlockIO":  "14.9MB / 128MB",
+                                                    "CPUPerc":  "109.55%",
+                                                    "Container":  "railstream-spark-silver-1",
+                                                    "ID":  "92f9970e0c2d",
+                                                    "MemPerc":  "59.28%",
+                                                    "MemUsage":  "910.5MiB / 1.5GiB",
+                                                    "Name":  "railstream-spark-silver-1",
+                                                    "NetIO":  "12.3MB / 923kB",
+                                                    "PIDs":  "108"
+                                                }
+                                  },
+                                  {
+                                      "time_utc":  "2026-11-16T13:19:51.6850431Z",
+                                      "stats":  {
+                                                    "BlockIO":  "14.9MB / 128MB",
+                                                    "CPUPerc":  "110.58%",
+                                                    "Container":  "railstream-spark-silver-1",
+                                                    "ID":  "92f9970e0c2d",
+                                                    "MemPerc":  "59.87%",
+                                                    "MemUsage":  "919.6MiB / 1.5GiB",
+                                                    "Name":  "railstream-spark-silver-1",
+                                                    "NetIO":  "13.4MB / 928kB",
+                                                    "PIDs":  "108"
+                                                }
+                                  },
+                                  {
+                                      "time_utc":  "2026-11-16T13:19:55.5549588Z",
+                                      "stats":  {
+                                                    "BlockIO":  "14.9MB / 150MB",
+                                                    "CPUPerc":  "130.65%",
+                                                    "Container":  "railstream-spark-silver-1",
+                                                    "ID":  "92f9970e0c2d",
+                                                    "MemPerc":  "62.12%",
+                                                    "MemUsage":  "954.1MiB / 1.5GiB",
+                                                    "Name":  "railstream-spark-silver-1",
+                                                    "NetIO":  "14.7MB / 1.01MB",
+                                                    "PIDs":  "111"
+                                                }
+                                  },
+                                  {
+                                      "time_utc":  "2026-11-16T13:19:58.6427679Z",
+                                      "stats":  {
+                                                    "BlockIO":  "15MB / 150MB",
+                                                    "CPUPerc":  "362.15%",
+                                                    "Container":  "railstream-spark-silver-1",
+                                                    "ID":  "92f9970e0c2d",
+                                                    "MemPerc":  "66.28%",
+                                                    "MemUsage":  "1018MiB / 1.5GiB",
+                                                    "Name":  "railstream-spark-silver-1",
+                                                    "NetIO":  "19.5MB / 1.08MB",
+                                                    "PIDs":  "179"
+                                                }
+                                  },
+                                  {
+                                      "time_utc":  "2026-11-16T13:20:23.5315101Z",
+                                      "stats":  {
+                                                    "BlockIO":  "165MB / 580MB",
+                                                    "CPUPerc":  "1.79%",
+                                                    "Container":  "railstream-spark-silver-1",
+                                                    "ID":  "92f9970e0c2d",
+                                                    "MemPerc":  "97.44%",
+                                                    "MemUsage":  "1.462GiB / 1.5GiB",
+                                                    "Name":  "railstream-spark-silver-1",
+                                                    "NetIO":  "51.7MB / 11.7MB",
+                                                    "PIDs":  "321"
+                                                }
+                                  },
+                                  {
+                                      "time_utc":  "2026-11-16T13:20:27.5713429Z",
+                                      "stats":  {
+                                                    "BlockIO":  "165MB / 580MB",
+                                                    "CPUPerc":  "0.24%",
+                                                    "Container":  "railstream-spark-silver-1",
+                                                    "ID":  "92f9970e0c2d",
+                                                    "MemPerc":  "97.44%",
+                                                    "MemUsage":  "1.462GiB / 1.5GiB",
+                                                    "Name":  "railstream-spark-silver-1",
+                                                    "NetIO":  "51.7MB / 11.7MB",
+                                                    "PIDs":  "321"
+                                                }
+                                  },
+                                  {
+                                      "time_utc":  "2026-11-16T13:20:30.6336482Z",
+                                      "stats":  {
+                                                    "BlockIO":  "165MB / 580MB",
+                                                    "CPUPerc":  "0.41%",
+                                                    "Container":  "railstream-spark-silver-1",
+                                                    "ID":  "92f9970e0c2d",
+                                                    "MemPerc":  "97.44%",
+                                                    "MemUsage":  "1.462GiB / 1.5GiB",
+                                                    "Name":  "railstream-spark-silver-1",
+                                                    "NetIO":  "51.7MB / 11.7MB",
+                                                    "PIDs":  "321"
+                                                }
+                                  },
+                                  {
+                                      "time_utc":  "2026-11-16T13:20:33.7038059Z",
+                                      "stats":  {
+                                                    "BlockIO":  "165MB / 580MB",
+                                                    "CPUPerc":  "0.37%",
+                                                    "Container":  "railstream-spark-silver-1",
+                                                    "ID":  "92f9970e0c2d",
+                                                    "MemPerc":  "97.44%",
+                                                    "MemUsage":  "1.462GiB / 1.5GiB",
+                                                    "Name":  "railstream-spark-silver-1",
+                                                    "NetIO":  "51.7MB / 11.7MB",
+                                                    "PIDs":  "321"
+                                                }
+                                  },
+                                  {
+                                      "time_utc":  "2026-11-16T13:20:36.7826872Z",
+                                      "stats":  {
+                                                    "BlockIO":  "165MB / 580MB",
+                                                    "CPUPerc":  "0.25%",
+                                                    "Container":  "railstream-spark-silver-1",
+                                                    "ID":  "92f9970e0c2d",
+                                                    "MemPerc":  "97.44%",
+                                                    "MemUsage":  "1.462GiB / 1.5GiB",
+                                                    "Name":  "railstream-spark-silver-1",
+                                                    "NetIO":  "51.7MB / 11.7MB",
+                                                    "PIDs":  "321"
+                                                }
+                                  },
+                                  {
+                                      "time_utc":  "2026-11-16T13:20:39.8571245Z",
+                                      "stats":  {
+                                                    "BlockIO":  "165MB / 582MB",
+                                                    "CPUPerc":  "0.25%",
+                                                    "Container":  "railstream-spark-silver-1",
+                                                    "ID":  "92f9970e0c2d",
+                                                    "MemPerc":  "97.44%",
+                                                    "MemUsage":  "1.462GiB / 1.5GiB",
+                                                    "Name":  "railstream-spark-silver-1",
+                                                    "NetIO":  "51.7MB / 11.7MB",
+                                                    "PIDs":  "321"
+                                                }
+                                  },
+                                  {
+                                      "time_utc":  "2026-11-16T13:20:42.9353021Z",
+                                      "stats":  {
+                                                    "BlockIO":  "165MB / 582MB",
+                                                    "CPUPerc":  "0.22%",
+                                                    "Container":  "railstream-spark-silver-1",
+                                                    "ID":  "92f9970e0c2d",
+                                                    "MemPerc":  "97.45%",
+                                                    "MemUsage":  "1.462GiB / 1.5GiB",
+                                                    "Name":  "railstream-spark-silver-1",
+                                                    "NetIO":  "51.7MB / 11.7MB",
+                                                    "PIDs":  "317"
+                                                }
+                                  },
+                                  {
+                                      "time_utc":  "2026-11-16T13:20:46.9765996Z",
+                                      "stats":  {
+                                                    "BlockIO":  "165MB / 582MB",
+                                                    "CPUPerc":  "0.21%",
+                                                    "Container":  "railstream-spark-silver-1",
+                                                    "ID":  "92f9970e0c2d",
+                                                    "MemPerc":  "97.44%",
+                                                    "MemUsage":  "1.462GiB / 1.5GiB",
+                                                    "Name":  "railstream-spark-silver-1",
+                                                    "NetIO":  "51.7MB / 11.7MB",
+                                                    "PIDs":  "317"
+                                                }
+                                  },
+                                  {
+                                      "time_utc":  "2026-11-16T13:20:50.0542374Z",
+                                      "stats":  {
+                                                    "BlockIO":  "165MB / 582MB",
+                                                    "CPUPerc":  "0.36%",
+                                                    "Container":  "railstream-spark-silver-1",
+                                                    "ID":  "92f9970e0c2d",
+                                                    "MemPerc":  "97.44%",
+                                                    "MemUsage":  "1.462GiB / 1.5GiB",
+                                                    "Name":  "railstream-spark-silver-1",
+                                                    "NetIO":  "51.7MB / 11.7MB",
+                                                    "PIDs":  "317"
+                                                }
+                                  },
+                                  {
+                                      "time_utc":  "2026-11-16T13:20:53.1310434Z",
+                                      "stats":  {
+                                                    "BlockIO":  "165MB / 582MB",
+                                                    "CPUPerc":  "0.26%",
+                                                    "Container":  "railstream-spark-silver-1",
+                                                    "ID":  "92f9970e0c2d",
+                                                    "MemPerc":  "97.44%",
+                                                    "MemUsage":  "1.462GiB / 1.5GiB",
+                                                    "Name":  "railstream-spark-silver-1",
+                                                    "NetIO":  "51.7MB / 11.7MB",
+                                                    "PIDs":  "317"
+                                                }
+                                  }
+                              ],
+                    "Count":  22
+                },
+    "note":  "Sampled development observation, not a sustained peak or benchmark. Samples were taken under the original 1.5 GiB cap; cap was subsequently raised to 2 GiB.",
+    "subsequent_memory_limit_bytes":  2147483648
+}
