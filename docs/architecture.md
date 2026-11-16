@@ -20,7 +20,7 @@ raw archive / live bridge ──► Redpanda (Kafka API + Schema Registry)
                               validate · dedupe · watermark · enrich
                                                      ▼
           Iceberg on SeaweedFS (S3 API), via the Lakekeeper REST catalog (state in Postgres)
-          bronze.trust_messages ─► silver.train_movements / activations / cancellations
+          bronze.trust_movement ─► silver.train_movements / activations / cancellations
                                    ref.locations (CORPUS) · ref.operators
                                                      ▼
                               dbt on DuckDB ─► gold: punctuality, hotspots,
@@ -33,6 +33,12 @@ Observability: Prometheus + Grafana (lag, freshness, DLQ rate, file counts)
 ```
 
 Details of each layer's schema: metrics.md (definitions) and data-sources.md (inputs).
+
+Current implementation (2026-11-16): bronze capture and revision-aware silver
+writes are implemented. Silver retains distinct revisions and current planned
+calls (ADR-008); Kafka DLQ publication is at least once with stable source keys.
+Watermarked state, reference enrichment, gold, orchestration and serving remain
+planned. The diagram includes those later stages.
 
 ## 3. Components
 

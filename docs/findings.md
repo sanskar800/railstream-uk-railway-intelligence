@@ -151,3 +151,29 @@ Integration test (`make it`), each run on its own topic, table and checkpoint: 5
 - A first version of the kill test used fixed 25–40 s timers and the job finished before the first kill; the test refused to pass with zero kills. Kills are now timed from the job's own committed-batch log.
 - Evidence: `results/dev/2026-11-09-bronze-kill-test/pytest-output.txt`.
 
+
+## F18. Planned-call corrections and durable rejects verified in silver (2026-11-16)
+
+Three captured days yielded 1,970,245 movements and 778 correction messages; 474
+matched candidate planned-call groups contained different actual times. Actual
+time is therefore mutable and cannot identify a correction (ADR-008). The generated
+profile and reproducible script are under `results/dev/2026-11-16-silver-profile/`
+and `scripts/profile_movements.py`.
+
+The new Spark silver scenario verified one current row across four revisions,
+three stream restarts from the same checkpoint, old/repeated replay without extra
+current rows, equal-time conflict visibility, and recovery from a failure between
+the durable reject write and Kafka publication. The durable reject table held one
+row while Kafka held two copies with the same key and failure timestamp. This is
+at-least-once DLQ publication, not exactly once. Summary:
+`results/dev/2026-11-16-silver-sink/summary.json`.
+
+A reader in the original Spark session initially saw cached empty-table metadata
+after the streaming session wrote rows. Explicit table refreshes fixed that and
+are also used before the sink reads existing revisions/current rows.
+
+The real bronze backlog then produced 107,222 typed movements and 4,212 other valid
+TRUST messages in the silver job's first batch. Container memory at the sampled
+point was 1.398 GiB / 1.5 GiB: near the cap, not a sustained-memory measurement.
+Re-check batch sizing and heap before adding stateful watermark processing.
+Watermark and CORPUS enrichment are still pending; no late-event cutoff is applied.

@@ -2,8 +2,8 @@
 
 Status: planned-call identity and bounded-state/durable-correction policy accepted
 2026-11-16. Shared parsing is implemented;
-the Spark silver job, runtime DLQ routing, watermark and enrichment are not yet
-wired. This document records the accepted direction; runtime checks remain required.
+the Spark silver job and runtime DLQ routing are now implemented (ADR-008).
+Watermarked state and CORPUS enrichment remain pending. This document records the accepted direction; runtime checks remain required.
 
 ## Evidence before choosing state
 
@@ -37,7 +37,8 @@ bronze payload + Kafka lineage
           +-- valid non-0003 --> identified as another type; retained in bronze
           +-- 0003 --> typed movement dictionary
 
-Next: Spark schema + DLQ sink + canonical silver persistence + reference joins
+Implemented: Spark schema + durable rejects/DLQ + canonical silver/revision tables
+Next: bounded state/late routing and reference joins
 ```
 
 The parser reuses raw-contract validation and the existing DST conversion.
@@ -98,3 +99,17 @@ Source for the distinction between watermark state eviction and persistent data:
 - CORPUS has exactly one selected row per STANOX; a left join preserves unknown
   locations and the movement row count. Refresh/version behaviour is explicit.
 - Restarting the silver processor preserves state and canonical results.
+
+## Running the implemented processor
+
+After `make up` and `make stream` have created bronze, run `make silver`.
+`make silver-logs` shows batch counts; the Spark UI is at localhost:4041.
+The job reads append snapshots of bronze and owns three Iceberg tables:
+`silver.trust_movement` (current), `silver.movement_revisions` (history), and
+`silver.rejected_messages` (durable rejects before Kafka publication).
+Run only one processor per namespace/checkpoint. Valid non-movement TRUST
+messages remain in bronze and are counted as `other`, not rejected.
+
+Focused integration test: `uv run pytest -m integration -s tests/integration/test_silver.py`.
+It creates isolated retained tables, a topic and a checkpoint; no deletes or kills.
+The broader `make it` still includes the destructive bronze kill tests.

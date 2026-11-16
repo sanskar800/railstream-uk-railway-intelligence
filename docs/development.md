@@ -153,3 +153,24 @@ Times are UTC (a timestamp without an offset is read as UTC). Replaying a window
 | Lint and unit tests | `uv sync --locked`, `make lint`, `make test` (no network or Docker needed by the tests) |
 | Contract compatibility | Starts an empty Redpanda (same image as the local stack), registers the base commit's contracts, checks the changed ones (`scripts/check_contracts.sh`); an incompatible change fails the job |
 
+
+## 7. Silver processor (Day 6, in progress)
+
+After bronze exists (`make up`, then `make stream`), `make silver` starts the
+revision-aware processor and `make silver-logs` shows movements/rejects/other counts.
+Its Spark UI is localhost:4041; its checkpoint is `/checkpoints/silver_trust_movement`
+in the existing checkpoint volume. One writer owns a namespace/checkpoint.
+
+Tables: `silver.trust_movement` (latest planned-call row),
+`silver.movement_revisions` (distinct revision history),
+`silver.rejected_messages` (durable rejects published to Kafka's DLQ). Equal-time
+conflicts and off-route unresolved identities are explicit flags, not hidden guesses.
+See `silver-design.md` and ADR-008 for guarantees and limitations. State watermarking
+and CORPUS enrichment remain pending. Initial backlog memory was sampled near
+1.4 GiB of the 1.5 GiB cap; measure again before adding state.
+
+Focused integration test: `uv run pytest -m integration -s tests/integration/test_silver.py`.
+It creates isolated retained tables/topic/checkpoint, with no drops or kills.
+The test mounts `tests/` and `streaming/` read-only into the built Spark image;
+shared `trust/` code must be current in the image. `make it` also includes the
+older destructive bronze kill tests and needs explicit approval before execution.

@@ -152,6 +152,29 @@ services:
     mem_limit: 1536m            # 1 GB driver heap + JVM overhead + Python
     restart: unless-stopped
 
+  # Bronze -> typed/current movements, revision history and DLQ (Day 6).
+  spark-silver:
+    build:
+      context: ../..
+      dockerfile: infra/spark/Dockerfile
+    image: railstream-spark:dev
+    profiles: ["stream"]
+    command: ["python", "-m", "streaming.silver"]
+    environment:
+      KAFKA_BOOTSTRAP: redpanda:9092
+      CATALOG_URI: http://lakekeeper:8181/catalog
+      WAREHOUSE: railstream
+      SPARK_DRIVER_MEMORY: 1g
+    ports:
+      - 127.0.0.1:4041:4040
+    volumes:
+      - spark-checkpoints:/checkpoints
+    depends_on:
+      redpanda: {condition: service_healthy}
+      lakekeeper: {condition: service_healthy}
+    mem_limit: 1536m
+    restart: unless-stopped
+
 volumes:
   spark-checkpoints:
   redpanda-data:
