@@ -41,6 +41,7 @@ Thumbs.db
 
 # Internal build plan and progress log (kept locally, not published)
 TASKS.md
+PROJECT_HANDOVER.md
 
 # CI test reports
 reports/
