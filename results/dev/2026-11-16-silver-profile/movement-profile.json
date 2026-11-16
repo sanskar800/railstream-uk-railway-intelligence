@@ -1,0 +1,82 @@
+{
+  "days": [
+    "2026-11-06",
+    "2026-11-07",
+    "2026-11-08"
+  ],
+  "source_root": "data\\raw\\trust",
+  "method": "whole-second rounded receive-minus-actual lag; nearest-rank quantiles",
+  "limitations": "Hour-file presence does not prove uninterrupted feed coverage. Planned-key groups are candidates, not proof of unique calls.",
+  "message_types": {
+    "0003": 1970245,
+    "0001": 81431,
+    "0005": 138,
+    "0002": 8836,
+    "0006": 585,
+    "0007": 64,
+    "0008": 71
+  },
+  "counts": {
+    "movements": 1970245,
+    "correction_messages": 778,
+    "corrected_planned_groups": 707,
+    "groups_with_ordinary_and_correction": 661,
+    "matched_groups_with_changed_actual_time": 474
+  },
+  "lateness": {
+    "all_movements": {
+      "count": 1970245,
+      "min_seconds": -536,
+      "max_seconds": 602022,
+      "p50_seconds": 27,
+      "p95_seconds": 96,
+      "p99_seconds": 286,
+      "p999_seconds": 32707,
+      "future_over_60s": 105905,
+      "beyond_seconds": {
+        "60": 427833,
+        "300": 19155,
+        "900": 14072,
+        "1800": 12006,
+        "3600": 9670,
+        "86400": 540
+      }
+    },
+    "ordinary_reports": {
+      "count": 1969467,
+      "min_seconds": -536,
+      "max_seconds": 602022,
+      "p50_seconds": 27,
+      "p95_seconds": 95,
+      "p99_seconds": 275,
+      "p999_seconds": 32142,
+      "future_over_60s": 105905,
+      "beyond_seconds": {
+        "60": 427125,
+        "300": 18634,
+        "900": 13700,
+        "1800": 11703,
+        "3600": 9475,
+        "86400": 508
+      }
+    },
+    "corrections": {
+      "count": 778,
+      "min_seconds": 1,
+      "max_seconds": 515086,
+      "p50_seconds": 723,
+      "p95_seconds": 53537,
+      "p99_seconds": 217236,
+      "p999_seconds": 515086,
+      "future_over_60s": 0,
+      "beyond_seconds": {
+        "60": 708,
+        "300": 521,
+        "900": 372,
+        "1800": 303,
+        "3600": 195,
+        "86400": 32
+      }
+    }
+  }
+}
