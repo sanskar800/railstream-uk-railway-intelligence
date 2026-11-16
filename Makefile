@@ -4,7 +4,7 @@
 # .env is optional for the local stack: every variable it can set has a local default.
 COMPOSE = docker compose $(if $(wildcard .env),--env-file .env,) -f infra/compose/compose.yaml
 
-.PHONY: help setup test it lint format live replay topics schemas stream stream-logs silver silver-logs load-corpus pull-raw up down ps logs tools stats
+.PHONY: help setup test it lint format live replay topics schemas stream stream-logs silver silver-logs load-corpus airflow airflow-logs pull-raw up down ps logs tools stats
 
 help:  ## List targets
 	@uv run python -c "import re; [print(f\"{m[0]:<12} {m[1]}\") for m in re.findall(r\"^([a-z-]+):.*## (.*)$$\", open(\"Makefile\").read(), re.M)]"
@@ -66,11 +66,20 @@ load-corpus:  ## Load the downloaded CORPUS as an immutable reference version (n
 silver-logs:  ## Follow silver batch counts (movements / rejects / other TRUST types)
 	$(COMPOSE) --profile stream logs -f spark-silver
 
+airflow:  ## Start the local Airflow scheduler and UI on http://localhost:8086
+	$(COMPOSE) up -d --wait postgres lakekeeper seaweedfs
+	$(COMPOSE) --profile init run --rm lakehouse-init
+	$(COMPOSE) exec -T postgres sh /docker-entrypoint-initdb.d/002-airflow.sh
+	$(COMPOSE) --profile airflow up -d --build --wait airflow
+
+airflow-logs:  ## Follow Airflow scheduler, API, parser and task logs
+	$(COMPOSE) --profile airflow logs -f --tail=100 airflow
+
 down:  ## Stop the stack (data volumes are kept)
-	$(COMPOSE) --profile tools --profile init --profile stream down
+	$(COMPOSE) --profile tools --profile init --profile stream --profile airflow down
 
 ps:  ## Show stack status
-	$(COMPOSE) --profile tools ps -a
+	$(COMPOSE) --profile tools --profile stream --profile airflow ps -a
 
 logs:  ## Follow stack logs
 	$(COMPOSE) logs -f --tail=100

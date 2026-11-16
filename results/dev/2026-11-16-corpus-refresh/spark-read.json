@@ -1,0 +1,23 @@
+{
+    "reference_rows":  22251,
+    "distinct_version_keys":  22251,
+    "versions":  [
+                     {
+                         "reference_version":  "20daf083e56a61da4dee7a71f80600f113123a816a69b0be03d6d2aa694b7fb6",
+                         "count":  11118
+                     },
+                     {
+                         "reference_version":  "d7b45c47aac5788c09f5286df91c0d74fff8269dd30398fed60d79c37cce62f2",
+                         "count":  11133
+                     }
+                 ],
+    "latest_locations":  11133,
+    "sample":  [
+                   {
+                       "stanox":  "74446",
+                       "location_name":  "OXFORD",
+                       "crs":  "OXF",
+                       "reference_version":  "d7b45c47aac5788c09f5286df91c0d74fff8269dd30398fed60d79c37cce62f2"
+                   }
+               ]
+}

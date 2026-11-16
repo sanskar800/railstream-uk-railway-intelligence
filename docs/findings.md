@@ -205,3 +205,53 @@ this is sampled development evidence, not sustained capacity proof. Larger
 backlogs and abrupt-kill silver recovery remain later verification work.
 
 Generated summaries and memory samples: `results/dev/2026-11-16-silver-state/`.
+
+## F20. Airflow's local scheduler and task execution verified (2026-11-16)
+
+Airflow 3.4.0 on Python 3.12 runs in the optional Compose profile using
+standalone/LocalExecutor and an isolated database in the retained Postgres
+service. A manual platform-check DAG completed through the actual scheduler;
+database, scheduler, DAG processor and triggerer heartbeats were healthy.
+Local UI login and protected DAG API access passed. Repeated bootstrap/startup
+preserved metadata and existing databases. No Airflow installation on Windows.
+
+The first attempt failed because Airflow passed `_CMD` output's trailing newline
+into the PostgreSQL database name. Emitting the encoded URI without a newline
+fixed it; a unit regression test covers that boundary and reserved password
+characters. This brought the unit suite to 138 passing tests.
+
+Memory after the trivial task was sampled around 1.01 GiB under a 1.5 GiB cap;
+the generated setup evidence contains later timestamped samples. This does not
+prove reference loads fit. All current profile caps sum to 7.5 GiB against about
+7.6 GiB available, so unused services stay stopped. CORPUS download/validation/load
+automation is the next step; the manual smoke DAG does not perform it.
+
+Evidence: `results/dev/2026-11-16-airflow-setup/`; decision: ADR-010.
+
+## F21. Real daily CORPUS refresh, retry and Spark interoperability verified (2026-11-16)
+
+The three-task Airflow DAG downloaded and validated the actual CORPUS file,
+selecting 11,133 STANOX locations. PyIceberg appended its new immutable content
+version through Lakekeeper remote signing; repeated successful runs inserted
+zero rows. The existing Spark reader then observed 22,251 distinct version keys:
+the original 11,118 rows and the new 11,133 rows, with Oxford correctly resolved.
+
+An early direct Compose startup omitted explicit `.env` loading, so the download
+task lacked credentials. Starting through `make airflow` fixed the wiring; the
+manual run recovered on retry. Failed setup history remains visible. The target
+now also initializes bucket/warehouse idempotently for a fresh setup. No account
+credentials were put in task results or request logs; cross-origin redirects
+strip Basic Auth. The example environment file still contains public defaults.
+
+The focused retained-table integration passed DAG import/wiring and daily cron
+checks, stable STANOX selection, repeat-without-new-snapshot, immutable old
+versions and refusal to load changed content without validation. Unit checks
+cover malformed downloads, failed-download preservation and redirect credentials.
+Airflow 3.4's SDK DAG API differs from older DagBag/timetable examples, so the
+test uses the installed API and `dag.schedule`. 145 unit tests pass.
+
+Six samples around a repeated real run reached 1.272 GiB under the 1.5 GiB cap;
+no OOM or automatic restart was observed. This does not prove simultaneous
+full-stack capacity or indefinitely growing-history performance. Schedule
+snapshots and automated VM movement catch-up remain outside this implementation.
+Evidence: `results/dev/2026-11-16-corpus-refresh/`; decision: ADR-011.

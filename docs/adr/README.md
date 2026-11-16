@@ -15,6 +15,8 @@ An ADR records **one** significant decision: the context, the options considered
 | [007](007-spark-runtime-and-bronze-layout.md) | Spark 4.1.4 + Iceberg 1.12.0 in our own Python 3.12 image; checkpoints on a Docker volume; bronze partitioned by ingestion day, one file per batch | Accepted (2026-11-09) |
 | [008](008-silver-event-identity-and-revisions.md) | Planned-call identity, durable revisions/current rows and retry-safe rejects; Kafka DLQ publication remains at least once | Accepted (2026-11-16) |
 | [009](009-guarded-watermark-and-reference-versions.md) | Guarded live watermark, durable late/replay bypass and immutable CORPUS versions | Accepted (2026-11-16) |
+| [010](010-local-airflow-runtime.md) | Local Airflow standalone/LocalExecutor, isolated metadata in shared Postgres and one-task concurrency | Accepted (2026-11-16) |
+| [011](011-corpus-refresh-and-native-iceberg-writer.md) | Daily CORPUS download/validate/load, native Python Iceberg writer and immutable content versions | Accepted (2026-11-16) |
 
 Smaller decisions and accepted deviations from the spec are listed in [architecture.md §6](../architecture.md#6-deviations-from-the-original-specification); what the build revealed is in [findings.md](../findings.md).
 

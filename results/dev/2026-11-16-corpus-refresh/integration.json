@@ -1,0 +1,16 @@
+{
+    "table":  "corpus_it_131227bb.locations",
+    "versions":  2,
+    "rows":  4,
+    "repeat_inserted":  0,
+    "verified":  [
+                     "dag_import",
+                     "task_wiring",
+                     "daily_schedule",
+                     "duplicate_key_selection",
+                     "repeat_without_new_snapshot",
+                     "immutable_old_version",
+                     "changed_input_rejected"
+                 ],
+    "cleanup":  "isolated reference table retained; no deletes"
+}

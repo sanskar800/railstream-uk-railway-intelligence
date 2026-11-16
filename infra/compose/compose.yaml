@@ -1,6 +1,7 @@
 # RailStream local stack. Run through the Makefile (make up / make down / make ps).
 # Profiles: core services have none (always started); `tools` = Redpanda Console;
 # `stream` = the Spark streaming jobs (make stream).
+# `airflow` = local workflow scheduler and UI (make airflow).
 # All ports bind to 127.0.0.1. Credentials are local-development defaults, overridable in .env.
 name: railstream
 
@@ -62,6 +63,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres-local}
       LAKEKEEPER_DB_PASSWORD: ${LAKEKEEPER_DB_PASSWORD:-lakekeeper-local}
+      AIRFLOW_DB_PASSWORD: ${AIRFLOW_DB_PASSWORD:-airflow-local}
     ports:
       - 127.0.0.1:5434:5432     # 5432/5433 are taken by other local databases
     volumes:
@@ -128,6 +130,57 @@ services:
       redpanda: {condition: service_healthy}
     mem_limit: 256m
 
+  # Local development: one parent supervises API, scheduler, parser and triggerer.
+  # LocalExecutor needs no Redis/Celery services. Metadata is isolated from Lakekeeper.
+  airflow:
+    build:
+      context: ../..
+      dockerfile: infra/airflow/Dockerfile
+    image: railstream-airflow:dev
+    profiles: ["airflow"]
+    command: ["python", "/railstream/infra/airflow/start.py"]
+    environment:
+      AIRFLOW_DB_PASSWORD: ${AIRFLOW_DB_PASSWORD:-airflow-local}
+      AIRFLOW_UI_PASSWORD: ${AIRFLOW_UI_PASSWORD:-railstream-local}
+      NR_USERNAME: ${NR_USERNAME:-}
+      NR_PASSWORD: ${NR_PASSWORD:-}
+      CATALOG_URI: http://lakekeeper:8181/catalog
+      WAREHOUSE: railstream
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN_CMD: python /railstream/infra/airflow/start.py --database-url
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__CORE__PARALLELISM: "1"
+      AIRFLOW__CORE__MAX_ACTIVE_TASKS_PER_DAG: "1"
+      AIRFLOW__CORE__MAX_ACTIVE_RUNS_PER_DAG: "1"
+      AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_USERS: railstream:admin
+      AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_PASSWORDS_FILE: /opt/airflow/ui-passwords.json
+      AIRFLOW__CORE__EXECUTION_API_SERVER_URL: http://127.0.0.1:8080/execution/
+      AIRFLOW__API__BASE_URL: http://localhost:8086
+      AIRFLOW__API__WORKERS: "1"
+      AIRFLOW__API_AUTH__JWT_SECRET: ${AIRFLOW_JWT_SECRET:-railstream-local-jwt-for-development-only}
+      AIRFLOW__DAG_PROCESSOR__PARSING_PROCESSES: "1"
+      AIRFLOW__DATABASE__SQL_ALCHEMY_POOL_SIZE: "2"
+      AIRFLOW__DATABASE__SQL_ALCHEMY_MAX_OVERFLOW: "2"
+    ports:
+      - 127.0.0.1:8086:8080
+    volumes:
+      - airflow-home:/opt/airflow
+      - ../airflow:/railstream/infra/airflow:ro
+      - ../../orchestration/dags:/opt/airflow/dags:ro
+    depends_on:
+      postgres: {condition: service_healthy}
+      lakekeeper: {condition: service_healthy}
+      seaweedfs: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "python", "/railstream/infra/airflow/health.py"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 60s
+    mem_limit: 1536m
+    stop_grace_period: 60s
+    restart: unless-stopped
+
   # Kafka -> Iceberg bronze (task 5.2). Spark in local mode inside one container (ADR-007).
   spark-bronze:
     build:
@@ -177,6 +230,7 @@ services:
     restart: unless-stopped
 
 volumes:
+  airflow-home:
   spark-checkpoints:
   redpanda-data:
   seaweedfs-data:

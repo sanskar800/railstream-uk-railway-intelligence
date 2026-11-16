@@ -24,7 +24,7 @@
 - Verify: `make setup` creates `.venv`.
 
 ### Docker Desktop + Compose
-- Why: Redpanda, MinIO, Postgres, Spark and Airflow all run as containers.
+- Why: Redpanda, SeaweedFS, Postgres, Spark and Airflow all run as containers.
 - Check: `docker info --format '{{.MemTotal}}'` prints the memory available to Docker (fails if Docker Desktop is not running).
 - Verify: `docker compose version`.
 
@@ -190,3 +190,111 @@ It creates isolated retained tables/topic/checkpoint, with no drops or kills.
 The test mounts `tests/` and `streaming/` read-only into the built Spark image;
 shared `trust/` code must be current in the image. `make it` also includes the
 older destructive bronze kill tests and needs explicit approval before execution.
+
+## 8. Airflow reference refresh (Day 7)
+
+Airflow runs in Docker, not the Windows Python environment. Docker Desktop and
+Compose are the only prerequisites: check `docker info` and `docker compose version`.
+From the project root in PowerShell, on this machine:
+
+```powershell
+$env:DOCKER_CONTEXT = "desktop-linux"
+make airflow
+```
+
+The first run builds `railstream-airflow:dev` on `apache/airflow:3.4.0-python3.12`,
+adding PyIceberg 0.12.0 and its S3 dependencies under Airflow's pinned constraints.
+The target starts Postgres/catalog/storage, initializes the bucket and warehouse
+idempotently, creates only missing Airflow database resources, then waits for
+Airflow to become healthy.
+No data volume is reset. `make up` still starts
+the streaming core; it does not enable Airflow automatically.
+
+Open **http://localhost:8086**. Local login: username `railstream`, default password
+`railstream-local` (override `AIRFLOW_UI_PASSWORD` in `.env` if desired). These are
+development defaults. Never reuse Network Rail credentials. Airflow's UI login
+and database password are separate. Passwords containing reserved URI characters
+are encoded before database connection. `_CMD` output must have no trailing
+newline; a regression test covers that boundary.
+
+`railstream_platform_check` is a **manual, read-only** setup DAG, with one task.
+Select it, trigger it, open the run and then its task logs to see
+`RAILSTREAM_PLATFORM_CHECK: task execution succeeded`. It proves scheduling and
+execution; it does not download CORPUS or start Spark.
+
+`refresh_corpus` is the implemented reference workflow:
+
+```text
+download (Network Rail HTTPS) -> validate (CORPUS + STANOX rules)
+                            -> load (Lakekeeper -> Iceberg ref.locations)
+```
+
+It is enabled on a daily **04:00 UTC** schedule, with two retries, a one-minute
+retry delay and one active run. You can also trigger it manually in the UI.
+Open its latest successful run, then each task's logs. The load log reports the
+content version, selected locations and inserted count. A repeated content
+version reports `inserted=0`. Previous versions and their timestamps stay intact.
+Silver uses the newest reference on its next micro-batch; new input or replay
+refreshes affected existing current rows. Streaming services need not run for
+the reference workflow to execute.
+
+Always use `make airflow` to start/rebuild it: the target explicitly passes
+`--env-file .env`. Direct Compose commands that omit that flag may miss the
+Network Rail credentials with this Compose file's nested location. Only
+`NR_USERNAME`/`NR_PASSWORD` are injected for the download; no credentials are
+copied into the image. Redirects to signed storage lose the Basic Auth header,
+and task results contain paths/hash/counts, not passwords or signed URLs.
+Reference files live inside `airflow-home` at `/opt/airflow/reference/corpus/`,
+with one directory per run. They are not automatically copied to the laptop's
+`data/reference/` folder.
+
+The laptop and Docker must be on for scheduled tasks. `catchup=False` avoids
+replaying every missed daily reference interval; the latest due refresh may run
+on startup. The cloud VM continues archiving movements independently. Automated
+movement catch-up from that VM remains future work; it is not supplied by this DAG.
+
+Proposed movement catch-up follow-up: a separate workflow pulls only completed
+VM hour files, preflights coverage with the existing replay checks, then replays
+the missing/overlapping UTC window into Kafka. Record an archive cursor only
+after confirmed Kafka delivery; silver's durable keys handle overlap. Keep feed
+gaps explicit instead of treating missing hours as success. This is a proposal,
+not an implemented automatic restart/backfill feature.
+
+```powershell
+make airflow-logs
+make ps
+docker compose --env-file .env -f infra/compose/compose.yaml --profile airflow stop airflow
+```
+
+`make down` includes the Airflow profile and preserves named volumes. Airflow
+metadata lives in its own `airflow` Postgres database/role; logs and runtime files
+live in `airflow-home`. DAG code under `orchestration/dags/` is mounted read-only.
+Rerunning bootstrap never drops a database or changes an existing role password.
+If existing credentials differ from `.env`, resolve that explicitly rather than
+resetting the database. Postgres initialization scripts run automatically only
+on a new volume, so `make airflow` explicitly runs the idempotent Airflow script
+for existing volumes too.
+
+The profile uses LocalExecutor with one task, one API worker and one parser.
+Health checks verify API access plus database/scheduler/parser/triggerer health.
+Observed after the smoke task: Airflow about 1.01 GiB of its 1.5 GiB cap, Postgres
+about 86 MiB of 256 MiB. These are sampled development observations, not capacity
+benchmarks. All current core/tools/stream/Airflow limits total 7.5 GiB, near
+Docker's ~7.6 GiB. Keep unused profiles stopped; larger tasks still need measurement.
+The first setup started only Airflow/Postgres; reference workflows also need
+Lakekeeper and SeaweedFS, now started as dependencies. Kafka, the streaming jobs
+and Console remain stopped unless requested. Standalone is for local development,
+with deployment changes deferred to the cloud hosting step (ADR-010).
+
+During/after a repeated real CORPUS run, six samples reached 1.272 GiB under the
+1.5 GiB cap with no observed OOM/restart. This remains a sampled observation;
+the entire streaming stack was not running concurrently during this check.
+
+Focused non-destructive workflow test:
+`uv run pytest -m integration -s tests/integration/test_corpus.py` (after `make airflow`).
+It imports/wires the real DAG and writes only an isolated retained reference table.
+It verifies repeated versions create neither duplicate rows nor another snapshot,
+old versions survive a changed file, and changed input cannot bypass validation.
+The broader `make it` still contains destructive bronze tests; do not use it for
+this check. Generated real-run and Spark interoperability evidence is under
+`results/dev/2026-11-16-corpus-refresh/`.

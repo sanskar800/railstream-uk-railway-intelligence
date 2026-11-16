@@ -1,0 +1,68 @@
+{
+  "observed_at_utc": "2026-11-16T23:32:16.214296+00:00",
+  "checked_run": "day7_corpus_repeat_20261116T232637",
+  "tasks": [
+    {
+      "dag_id": "refresh_corpus",
+      "logical_date": "",
+      "task_id": "validate",
+      "state": "success",
+      "start_date": "2026-11-16T23:26:43.648861+00:00",
+      "end_date": "2026-11-16T23:26:44.144932+00:00"
+    },
+    {
+      "dag_id": "refresh_corpus",
+      "logical_date": "",
+      "task_id": "load",
+      "state": "success",
+      "start_date": "2026-11-16T23:26:45.359125+00:00",
+      "end_date": "2026-11-16T23:26:47.206114+00:00"
+    },
+    {
+      "dag_id": "refresh_corpus",
+      "logical_date": "",
+      "task_id": "download",
+      "state": "success",
+      "start_date": "2026-11-16T23:26:41.452793+00:00",
+      "end_date": "2026-11-16T23:26:42.353732+00:00"
+    }
+  ],
+  "dag_runs": [
+    {
+      "dag_id": "refresh_corpus",
+      "run_id": "day7_corpus_repeat_20261116T232637",
+      "state": "success",
+      "run_after": "2026-11-16T23:26:40.812773+00:00",
+      "logical_date": "",
+      "start_date": "2026-11-16T23:26:41.399552+00:00",
+      "end_date": "2026-11-16T23:26:47.512454+00:00"
+    },
+    {
+      "dag_id": "refresh_corpus",
+      "run_id": "day7_corpus_20261116T232337",
+      "state": "success",
+      "run_after": "2026-11-16T23:23:40.142473+00:00",
+      "logical_date": "",
+      "start_date": "2026-11-16T23:23:40.756206+00:00",
+      "end_date": "2026-11-16T23:23:47.963596+00:00"
+    },
+    {
+      "dag_id": "refresh_corpus",
+      "run_id": "day7_corpus_20261116T231909",
+      "state": "success",
+      "run_after": "2026-11-16T23:19:12.720293+00:00",
+      "logical_date": "",
+      "start_date": "2026-11-16T23:21:19.243144+00:00",
+      "end_date": "2026-11-16T23:23:34.663953+00:00"
+    },
+    {
+      "dag_id": "refresh_corpus",
+      "run_id": "scheduled__2026-11-16T04:00:00+00:00",
+      "state": "failed",
+      "run_after": "2026-11-16T04:00:00+00:00",
+      "logical_date": "2026-11-16T04:00:00+00:00",
+      "start_date": "2026-11-16T23:19:09.929233+00:00",
+      "end_date": "2026-11-16T23:21:18.196896+00:00"
+    }
+  ]
+}
