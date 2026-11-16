@@ -116,7 +116,8 @@ def start(
         .option("includeHeaders", "true")
         .option("maxOffsetsPerTrigger", max_offsets_per_trigger)  # bounds a batch's memory
         # failOnDataLoss stays true (default): if offsets expired before being read (laptop off
-        # longer than Kafka's 7-day retention) the query stops loudly; refill by replay.
+        # longer than Kafka's retention) the query stops loudly. Replay creates new offsets;
+        # it cannot repair expired checkpoint offsets (docs/recovery.md).
         .load()
     )
     writer = (

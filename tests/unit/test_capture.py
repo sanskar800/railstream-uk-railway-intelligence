@@ -2,6 +2,8 @@ import gzip
 import json
 from datetime import UTC, datetime, timedelta, timezone
 
+import pytest
+
 from ingest.stomp_bridge.capture import RawCaptureWriter, compress_file, hour_of
 
 T0 = datetime(2026, 11, 5, 14, 59, 58, tzinfo=UTC)
@@ -92,3 +94,51 @@ def test_last_received_at_reads_the_newest_frame_back_from_disk(tmp_path):
 
     restarted = RawCaptureWriter(tmp_path)
     assert restarted.last_received_at() == T0 + timedelta(seconds=3)
+
+
+@pytest.mark.parametrize("previous_hour", [False, True])
+def test_startup_preserves_partial_tail_and_continues_capture(tmp_path, previous_hour):
+    writer = RawCaptureWriter(tmp_path)
+    path = writer.write(T0, {}, "[]")
+    writer.close()
+    tail = b'{"received_at":"broken\xe2'
+    with path.open("ab") as fh:
+        fh.write(tail)
+    restarted = RawCaptureWriter(tmp_path)
+    now = T0 + timedelta(hours=1) if previous_hour else T0
+    restarted.compress_completed(now)
+    assert restarted.last_received_at() == T0
+    assert [p.read_bytes() for p in path.parent.glob("*.damaged-*")] == [tail]
+    new = restarted.write(now + timedelta(seconds=1), {}, "[]")
+    restarted.close()
+    assert read_lines(new)[-1]["received_at"] == (now + timedelta(seconds=1)).isoformat()
+
+
+def test_complete_record_without_newline_is_kept_before_append(tmp_path):
+    writer = RawCaptureWriter(tmp_path)
+    path = writer.write(T0, {}, "[]")
+    writer.close()
+    path.write_bytes(path.read_bytes().rstrip(b"\n"))
+    restarted = RawCaptureWriter(tmp_path)
+    restarted.write(T0 + timedelta(seconds=1), {}, "[]")
+    restarted.close()
+    assert len(read_lines(path)) == 2
+    assert not list(path.parent.glob("*.damaged-*"))
+
+
+def test_interior_corruption_is_not_discarded(tmp_path):
+    path = RawCaptureWriter(tmp_path).path_for(T0)
+    path.parent.mkdir(parents=True)
+    data = b'broken\n{"received_at":"2026-11-05T14:59:58+00:00"}\n'
+    path.write_bytes(data)
+    with pytest.raises(ValueError, match="corrupt capture record"):
+        RawCaptureWriter(tmp_path).last_received_at()
+    assert path.read_bytes() == data
+
+
+def test_startup_ignores_incomplete_compression_files(tmp_path):
+    writer = RawCaptureWriter(tmp_path)
+    path = writer.write(T0, {}, "[]")
+    writer.close()
+    path.with_name("hour=15.jsonl.gz.tmp").write_bytes(b"incomplete gzip")
+    assert RawCaptureWriter(tmp_path).last_received_at() == T0

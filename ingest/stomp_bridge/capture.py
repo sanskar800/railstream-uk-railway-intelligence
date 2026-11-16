@@ -14,10 +14,62 @@ from __future__ import annotations
 
 import gzip
 import json
+import logging
 import os
 import shutil
 from datetime import UTC, datetime
 from pathlib import Path
+from uuid import uuid4
+
+log = logging.getLogger("capture")
+
+
+def capture_files(root: Path) -> list[Path]:
+    """One representation per hour; plain is authoritative until compression unlinks it.
+
+    Exact suffixes exclude unfinished compression files and quarantined tails.
+    """
+    hours = {p.with_suffix("") for p in root.glob("date=*/hour=*.jsonl.gz")}
+    hours.update(root.glob("date=*/hour=*.jsonl"))
+    return [p if p.exists() else p.with_suffix(".jsonl.gz") for p in sorted(hours)]
+
+
+def recover_tail(path: Path) -> None:
+    """Repair only an unterminated final append; preserve damaged bytes before truncating.
+
+    Newline-terminated or interior corruption is an error, never silently discarded.
+    Call only on closed plain files, with a single capture writer owning the directory.
+    """
+    if not path.exists():
+        return
+    with path.open("r+b") as fh:
+        while True:
+            offset = fh.tell()
+            line = fh.readline()
+            if not line:
+                return
+            try:
+                json.loads(line)
+            except (ValueError, UnicodeDecodeError):
+                if line.endswith(b"\n"):
+                    raise ValueError(f"corrupt capture record in {path} at byte {offset}") from None
+                backup = path.with_name(f"{path.name}.damaged-{uuid4().hex}")
+                with backup.open("xb") as out:
+                    out.write(line)
+                    out.flush()
+                    os.fsync(out.fileno())
+                fh.seek(offset)
+                fh.truncate()
+                fh.flush()
+                os.fsync(fh.fileno())
+                log.warning("incomplete append preserved in %s; recovered %s", backup, path)
+                return
+            if not line.endswith(b"\n"):
+                fh.seek(0, os.SEEK_END)
+                fh.write(b"\n")
+                fh.flush()
+                os.fsync(fh.fileno())
+                return
 
 
 def hour_of(ts: datetime) -> datetime:
@@ -31,6 +83,7 @@ def compress_file(path: Path) -> Path:
     Idempotent: if a crash happens after the replace but before the unlink, running it again
     rewrites the same .gz from the same plain file.
     """
+    recover_tail(path)
     gz_path = path.with_suffix(".jsonl.gz")
     tmp_path = gz_path.with_name(gz_path.name + ".tmp")
     with path.open("rb") as src, gzip.open(tmp_path, "wb", compresslevel=6) as dst:
@@ -66,6 +119,7 @@ class RawCaptureWriter:
         current = self.path_for(hour_of(now))
         done = []
         for path in sorted(self.root.glob("date=*/hour=*.jsonl")):
+            recover_tail(path)
             if path != current:
                 done.append(compress_file(path))
         return done
@@ -76,11 +130,10 @@ class RawCaptureWriter:
         Lets a restarted bridge know how long it was away, so a gap across a process or host
         restart is detected, not only gaps within one run.
         """
-        files = sorted(
-            self.root.glob("date=*/hour=*.jsonl*"),
-            key=lambda p: (p.parent.name, p.name.split(".")[0]),
-        )
+        files = capture_files(self.root)
         for path in reversed(files):
+            if path.suffix == ".jsonl":
+                recover_tail(path)
             opener = gzip.open if path.suffix == ".gz" else open
             last = None
             with opener(path, "rt", encoding="utf-8") as fh:
@@ -104,5 +157,6 @@ class RawCaptureWriter:
             compress_file(previous)
         self._path = self.path_for(hour)
         self._path.parent.mkdir(parents=True, exist_ok=True)
+        recover_tail(self._path)
         self._fh = self._path.open("a", encoding="utf-8")
         self._hour = hour

@@ -35,11 +35,24 @@ def hour_files(root: Path, start: datetime, end: datetime) -> list[Path]:
     hour = hour_of(start)
     while hour < end:
         base = root / f"date={hour:%Y-%m-%d}" / f"hour={hour:%H}.jsonl"
-        for path in (base.with_suffix(".jsonl.gz"), base):
-            if path.exists():
-                files.append(path)
+        # Plain remains authoritative until compression successfully unlinks it.
+        if base.exists():
+            files.append(base)
+        elif base.with_suffix(".jsonl.gz").exists():
+            files.append(base.with_suffix(".jsonl.gz"))
         hour += timedelta(hours=1)
     return files
+
+
+def missing_hours(root: Path, start: datetime, end: datetime) -> list[datetime]:
+    """Missing hour files, not proof of complete coverage within files that exist."""
+    missing = []
+    hour = hour_of(start)
+    while hour < end:
+        if not hour_files(root, hour, hour + timedelta(hours=1)):
+            missing.append(hour)
+        hour += timedelta(hours=1)
+    return missing
 
 
 def read_frames(root: Path, start: datetime, end: datetime) -> Iterator[Frame]:

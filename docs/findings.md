@@ -1,5 +1,22 @@
 # Findings
 
+## Recovery follow-up (2026-11-16)
+
+The migration review reproduced two failure cases using temporary files: a partial
+last append raised JSONDecodeError during last-frame lookup, and replay read a
+plain hour plus its compressed copy twice. The fixes now quarantine an incomplete
+tail before truncation, preserve valid records missing only a newline, ignore
+compression temporary files, and select the plain hour while it exists. Corruption
+inside complete records remains an explicit error. Replay now preflights missing
+hours and returns nonzero for skipped input, empty windows or incomplete delivery.
+See `recovery.md` and the regression tests in `tests/unit/test_capture.py`,
+`test_replay.py` and `test_replay_cli.py`.
+
+The historical kill-test evidence below is unchanged. Its random delay does not
+guarantee hitting a commit boundary. The revised test checks that Docker actually
+accepted each kill and that the interrupted job did not exit successfully; this
+destructive integration test was not rerun in the follow-up.
+
 Notable observations made while building, with the evidence behind each number. Development evidence, **not benchmark results**.
 
 ## F1. The movement feed batches messages into frames (2026-11-03)

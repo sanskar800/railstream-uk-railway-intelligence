@@ -133,6 +133,10 @@ Times are UTC (a timestamp without an offset is read as UTC). Replaying a window
 
 ## 5. Python project
 
+- Recovery behaviour, replay exit statuses, and Kafka retention/checkpoint
+  recovery: [recovery.md](recovery.md). Do not reset checkpoints to bypass an
+  expired-offset error.
+
 - `make setup`: install from `uv.lock`.
 - `make lint` / `make format`: ruff.
 - `make it`: integration tests against the running stack (`make up`, then `make stream` once to build the Spark image). Bronze: N messages in = N rows out, and a kill test (three SIGKILLs mid-run, restart from the checkpoint, no duplicates or loss). Each test uses its own topic, table and checkpoint; about 2 minutes. Not part of `make test` or CI (needs Docker and the stack).

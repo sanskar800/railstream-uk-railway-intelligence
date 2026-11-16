@@ -10,12 +10,13 @@ Examples:
 
 import argparse
 import logging
+import math
 import signal
 import threading
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from ingest.replay.replay import Pacer, read_frames, replay
+from ingest.replay.replay import Pacer, missing_hours, read_frames, replay
 from ingest.stream.producer import TrustProducer
 
 
@@ -42,18 +43,33 @@ def main() -> None:
         parser.error("--from needs --to")
     else:
         start, end = args.start, args.end
+    if end <= start:
+        parser.error("--to must be after --from")
+    if not math.isfinite(args.speed) or args.speed < 0:
+        parser.error("--speed must be finite and nonnegative")
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     log = logging.getLogger("replay")
     stop = threading.Event()
     signal.signal(signal.SIGINT, lambda *_: stop.set())
 
+    missing = missing_hours(args.root, start, end)
+    if missing:
+        log.error("missing capture hour(s): %s; replay has not started", missing)
+        raise SystemExit(1)
     producer = TrustProducer.connect(args.kafka, source="replay")
     log.info("replaying %s .. %s from %s at %s", start.isoformat(), end.isoformat(), args.root,
              f"{args.speed:g}x" if args.speed else "max speed")  # fmt: skip
-    stats = replay(read_frames(args.root, start, end), producer, Pacer(args.speed), stop.is_set)
-    undelivered = producer.flush(60)
+    stats = None
+    try:
+        stats = replay(read_frames(args.root, start, end), producer, Pacer(args.speed), stop.is_set)
+    except (OSError, ValueError, TypeError, KeyError) as exc:
+        log.error("incomplete replay: %s", exc)
+    finally:
+        undelivered = producer.flush(60)
     p = producer.take_stats()
+    if stats is None:
+        raise SystemExit(1)
     log.info(
         "done: %d frames, %d messages (%d unparseable frames skipped), received %s .. %s; "
         "kafka delivered=%d failed=%d undelivered=%d",
@@ -61,8 +77,14 @@ def main() -> None:
         stats.first and stats.first.isoformat(), stats.last and stats.last.isoformat(),
         p.delivered, p.failed, undelivered,
     )  # fmt: skip
-    if stats.frames == 0:
-        log.warning("no frames found in %s for that window (run `make pull-raw`?)", args.root)
+    if stop.is_set():
+        raise SystemExit(130)
+    if not stats.messages or stats.unparseable or p.failed or undelivered:
+        log.error("incomplete replay: empty input, skipped frames or undelivered records")
+        raise SystemExit(1)
+    if p.delivered != stats.messages:
+        log.error("incomplete replay: expected %d deliveries, got %d", stats.messages, p.delivered)
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

@@ -141,8 +141,8 @@ def test_killed_mid_run_restarts_without_duplicates_or_loss(topic, run_id):
         name = f"it-kill-{run_id}-{attempt}"
         proc = subprocess.Popen(bronze_cmd(name, topic, table, checkpoint, batch),
                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)  # fmt: skip
-        # Kill after a few committed batches, at a random moment inside the next one
-        # (a batch of 500 rows takes about a second), not on a fixed timer.
+        # Kill after a few committed batches and a random delay. This exercises recovery,
+        # but does not guarantee hitting the exact sink-commit/checkpoint boundary.
         wait_for = rng.randint(2, 5)
         deadline = time.monotonic() + 180
         while proc.poll() is None and time.monotonic() < deadline:
@@ -153,8 +153,12 @@ def test_killed_mid_run_restarts_without_duplicates_or_loss(topic, run_id):
             break  # finished before the kill: nothing left to interrupt
         time.sleep(rng.uniform(0.0, 1.0))
         done = committed_batches(name)
-        subprocess.run(["docker", "kill", "--signal", "KILL", name], capture_output=True)
-        proc.wait(timeout=60)
+        assert done >= wait_for, f"no batch-progress evidence before kill: {name}"
+        subprocess.run(
+            ["docker", "kill", "--signal", "KILL", name], capture_output=True, check=True
+        )
+        exit_code = proc.wait(timeout=60)
+        assert exit_code != 0, f"killed job unexpectedly exited successfully: {name}"
         kill_log.append(f"run {attempt}: SIGKILL after {done} batches")
     # Final run to completion from the same checkpoint.
     subprocess.run(

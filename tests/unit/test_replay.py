@@ -3,8 +3,8 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from ingest.replay.replay import Frame, Pacer, read_frames, replay
-from ingest.stomp_bridge.capture import RawCaptureWriter
+from ingest.replay.replay import Frame, Pacer, missing_hours, read_frames, replay
+from ingest.stomp_bridge.capture import RawCaptureWriter, compress_file
 from ingest.stream.producer import TrustProducer
 
 T0 = datetime(2026, 11, 6, 8, 59, 50, tzinfo=UTC)
@@ -114,3 +114,24 @@ def test_replay_can_be_stopped():
     replay(iter(frames), producer, Pacer(0), stop=lambda: len(sent) >= 2)
 
     assert len(sent) == 2
+
+
+def test_duplicate_hour_representations_replay_plain_once(tmp_path):
+    capture(tmp_path, [0])
+    plain = next(tmp_path.glob("date=*/hour=*.jsonl"))
+    original = plain.read_bytes()
+    gz = compress_file(plain)
+    plain.write_bytes(original)  # compression interrupted before unlink
+    # Plain may contain later appends; the older compressed file must not hide them.
+    writer = RawCaptureWriter(tmp_path)
+    writer.write(T0 + timedelta(seconds=1), {}, json.dumps([message("new")]))
+    writer.close()
+    assert gz.exists()
+    assert len(list(read_frames(tmp_path, T0, T0 + timedelta(seconds=5)))) == 2
+
+
+def test_missing_hour_preflight_distinguishes_gzip_and_plain(tmp_path):
+    capture(tmp_path, [0, 20])
+    assert missing_hours(tmp_path, T0, T0 + timedelta(hours=2)) == [
+        T0.replace(hour=10, minute=0, second=0)
+    ]
