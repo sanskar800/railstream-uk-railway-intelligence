@@ -49,3 +49,7 @@ future Airflow/monitoring profiles still need their own memory checks.
 - Focused retained-data scenarios verify state eviction, duplicate suppression,
   late corrections, replay after eviction, a future-clock guard and reference
   refresh. Abrupt-kill testing remains scheduled for Day 13.
+
+## Update 2026-11-17
+
+Silver's memory limit is now 3 GB with a 1.5 GB heap, and its batches are capped at 200,000 rows (findings F23), on the 12 GB processing VM (ADR-012). The watermark and routing design is unchanged.

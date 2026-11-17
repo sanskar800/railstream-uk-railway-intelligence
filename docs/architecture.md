@@ -7,61 +7,57 @@ Near-real-time delay visibility for a route control manager (brief.md): live tra
 ## 2. Overview
 
 ```
-                  ALWAYS-ON CAPTURE (Oracle Cloud Always Free VM)
-Network Rail ───► stomp_bridge (container) ───► raw archive: date=/hour= JSONL(.gz)
-STOMP (TRUST)     durable subscription,              │  make pull-raw (SSH)
-                  write+fsync, then ACK              ▼
-─────────────────────────────────────────────────────────────────────────────────
-                  LOCAL STACK (Docker Compose on the laptop)
-raw archive / live bridge ──► Redpanda (Kafka API + Schema Registry)
-                                 raw.trust.movement ─┬─► dlq.trust.movement
-                                                     ▼
-                              Spark Structured Streaming
-                              validate · dedupe · watermark · enrich
-                                                     ▼
-          Iceberg on SeaweedFS (S3 API), via the Lakekeeper REST catalog (state in Postgres)
-          bronze.trust_movement ─► silver.train_movements / activations / cancellations
-                                   ref.locations (CORPUS) · ref.operators
-                                                     ▼
-                              dbt on DuckDB ─► gold: punctuality, hotspots,
-                                               reactionary delay, cancellations
-                                                     ▼
-                              FastAPI + dashboard (DuckDB)
+              CAPTURE VM (Oracle Always Free, 1 GB, AD-3) — runs 24/7
+Network Rail ───► stomp_bridge (container) ──┬──► raw archive: date=/hour= JSONL(.gz)  (source of truth)
+STOMP (TRUST)     durable subscription,      │       └─ hourly, append-only ──► Object Storage bucket (ADR-013)
+                  write+fsync, then ACK      │
+                                             └──► private network (10.0.0.0/24, TCP 29092 only) ──┐
+─────────────────────────────────────────────────────────────────────────────────────────────────┼──
+              PROCESSING VM (Oracle Always Free, ARM, 2 OCPU / 12 GB, AD-1) — Docker Compose  ◄───┘
+Redpanda (Kafka API + Schema Registry): raw.trust.movement ─┬─► dlq.trust.movement
+                                                            ▼
+Spark Structured Streaming: bronze (raw + lineage) → silver (validate · dedupe · watermark · enrich)
+                                                            ▼
+Iceberg on SeaweedFS (S3 API), via the Lakekeeper REST catalog (state in Postgres)
+  bronze.trust_movement → silver.trust_movement (current call) · silver.movement_revisions (history)
+                          · silver.rejected_messages ;  ref.locations (CORPUS, versioned)
+                                                            ▼
+dbt on DuckDB → gold: punctuality, hotspots, reactionary delay   (planned, Days 9–10)
+                                                            ▼
+FastAPI + dashboard (DuckDB)                                     (planned, Day 12)
 
-Batch: Airflow ─ reference data loads, Iceberg compaction and snapshot expiry
-Observability: Prometheus + Grafana (lag, freshness, DLQ rate, file counts)
+Batch (Airflow on the same VM): CORPUS refresh (Mon/Thu); later Iceberg maintenance, dbt, quality checks
+Monitoring: feed_age_seconds every minute → Oracle Monitoring alarms → email (ADR-014);
+            Prometheus + Grafana for pipeline internals (planned, Day 12)
+Laptop: code only (commit, push; make tunnel / make sql to look)
 ```
 
 Details of each layer's schema: metrics.md (definitions) and data-sources.md (inputs).
 
-Current implementation (2026-11-16): bronze capture and revision-aware silver
-writes are implemented. Silver retains distinct revisions and current planned
-calls (ADR-008); Kafka DLQ publication is at least once with stable source keys.
-Guarded watermarked state and a versioned CORPUS left join are implemented
-(ADR-009). Airflow's local runtime, twice-weekly CORPUS
-download/validate/load workflow are implemented (ADRs 010/011). Gold and serving
-remain planned. Actual silver tables
-are `silver.trust_movement`, `silver.movement_revisions` and
-`silver.rejected_messages`; activations and cancellations remain in bronze.
-The diagram includes later stages.
+Current implementation (2026-11-17): capture, bronze and revision-aware silver run on the processing VM, fed by the capture VM's single bridge (ADR-012); the tables were rebuilt there by replaying the archive (F23). Silver retains distinct revisions and current planned calls (ADR-008); Kafka DLQ publication is at least once with stable source keys. Guarded watermarked state and a versioned CORPUS left join are implemented (ADR-009). Airflow runs the twice-weekly CORPUS download/validate/load workflow (ADRs 010/011). The raw archive is backed up hourly off the VM (ADR-013), and ingestion freshness is alarmed (ADR-014). Gold and serving remain planned. Activations and cancellations remain in bronze.
 
 ## 3. Components
 
-| Component | Role | Decision |
-|---|---|---|
-| STOMP bridge | Durable subscription; raw capture; (Day 3) produce to Kafka | findings F5, F6 |
-| Redpanda | Buffer, replay, ordering per train, data contracts | ADR-001 |
-| Spark Structured Streaming | Parse, validate, dedupe, watermark, enrich; exactly-once into Iceberg | spec |
-| Iceberg + SeaweedFS | Lakehouse tables on S3-compatible storage | ADR-002, findings F7 |
-| Lakekeeper (+ Postgres) | Shared Iceberg REST catalog | ADR-003 |
-| dbt on DuckDB | Gold models | ADR-004 |
-| Airflow | Reference data, Iceberg maintenance | spec |
-| Prometheus + Grafana | Pipeline health | spec |
+| Component | Where | Role | Decision |
+|---|---|---|---|
+| STOMP bridge | Capture VM | Durable subscription; raw capture (disk, then ACK); publishes to Kafka over the private network | findings F5, F6; ADR-005, ADR-012 |
+| Archive backup | Capture VM → Object Storage | Hourly, verified, append-only copy of completed hours | ADR-013 |
+| Redpanda | Processing VM | Buffer, replay, ordering per train, data contracts | ADR-001 |
+| Spark Structured Streaming | Processing VM | Parse, validate, dedupe, watermark, enrich; exactly-once into Iceberg | spec; ADR-007 |
+| Iceberg + SeaweedFS | Processing VM | Lakehouse tables on S3-compatible storage | ADR-002, findings F7 |
+| Lakekeeper (+ Postgres) | Processing VM | Shared Iceberg REST catalog; signs every storage request | ADR-003 |
+| dbt on DuckDB | Processing VM (planned) | Gold models | ADR-004 |
+| Airflow | Processing VM | Reference data now; Iceberg maintenance, dbt, quality checks later | spec; ADR-010 |
+| Freshness alarm | Processing VM → Oracle Monitoring | `feed_age_seconds` + absence alarm, email | ADR-014 |
+| Prometheus + Grafana | Processing VM (planned) | Pipeline internals: lag, batch duration, file counts | spec |
 
 ## 4. Deployment and memory
 
-- **Capture host:** Oracle Cloud Always Free VM (1 GB RAM), one container; runs 24/7 independently of the laptop (development.md).
-- **Laptop:** Docker Desktop with ~7.6 GiB. Compose profiles: `core` (Redpanda, SeaweedFS, Postgres, Lakekeeper) always on; `tools`, `airflow`, `monitoring`, `serving` on demand; per-service memory limits. Measured footprints are recorded in development.md.
+- **Capture VM** (`railstream-capture`): VM.Standard.E2.1.Micro, 1 GB, x86, AD-3. The bridge container (256 MB limit) and the backup timer. Independent of the processing VM: if that VM is down, capture and the archive continue and the gap is replayed later.
+- **Processing VM** (`railstream-core`): VM.Standard.A1.Flex, 2 OCPU / 12 GB, ARM, AD-1, 150 GB. The whole Compose stack with per-service memory limits; profiles `stream` (Spark) and `airflow`, `tools` (Console) on demand. Measured 2026-11-17 during the catch-up: ~4.6 GB of 11 GiB used; silver 1.4 GB of its 3 GB limit after F23.
+- **Access:** only SSH from outside; Kafka's private listener only from the subnet; UIs on the VM's localhost, reached with `make tunnel`.
+- **Laptop:** development and tests only (the same Compose stack runs locally for `make it`); not in the data path.
+- **Failure model:** the processing VM is a single point of failure for availability, not for data (everything on it is derived and rebuildable from the archive); capture is protected by the backup (history) and alarms (detection). A second collector is a possible later step.
 
 ## 5. Delivery guarantees
 

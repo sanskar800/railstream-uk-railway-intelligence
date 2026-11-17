@@ -20,3 +20,7 @@ The streaming jobs (bronze now, silver on Day 6) run Spark Structured Streaming 
 - Exactly once is checkable: (kafka_partition, kafka_offset) is unique per row, and per partition the offsets are contiguous from 0 (findings F16).
 - `DROP TABLE ... PURGE` from Spark errors after the drop has succeeded (Lakekeeper deletes the files itself and refuses to sign for a dropped table): use plain `DROP TABLE`.
 - Wrong if: the laptop's memory cannot hold Spark alongside the stack once silver's state store grows (re-measured on Day 6), or 1-minute batches cannot keep end-to-end freshness under 5 minutes p95 (Day 13).
+
+## Update 2026-11-17
+
+Spark now runs on the processing VM (ARM, 12 GB; ADR-012); the image's JAVA_HOME was made architecture-neutral. Silver's driver heap was raised to 1.5 GB in a 3 GB container and its micro-batches capped at 200,000 rows after an out-of-memory crash on a catch-up batch (findings F23).

@@ -44,3 +44,7 @@ is generated with URL-encoded credentials via Airflow's `_CMD` configuration.
 Sources: [Airflow installation](https://airflow.apache.org/docs/apache-airflow/stable/installation.html),
 [3.4.0 standalone implementation](https://github.com/apache/airflow/blob/3.4.0/airflow-core/src/airflow/cli/commands/standalone_command.py),
 [supported database backends](https://airflow.apache.org/docs/apache-airflow/stable/howto/set-up-database.html).
+
+## Update 2026-11-17
+
+Airflow now runs on the processing VM (12 GB; ADR-012) rather than the laptop. Standalone with LocalExecutor remains the right size; the memory argument still holds, with more headroom.

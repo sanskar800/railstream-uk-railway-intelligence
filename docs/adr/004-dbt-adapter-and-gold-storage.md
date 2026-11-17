@@ -22,3 +22,7 @@ Use **dbt-duckdb**. Gold is written **to Iceberg through the REST catalog if a t
 - No extra always-on service for transformation; the query layer (FastAPI over DuckDB) uses the same engine.
 - If gold ends up outside Iceberg, it is a derived layer rebuilt from silver in minutes, so losing Iceberg features there (time travel) is acceptable.
 - Wrong if: dbt on DuckDB cannot keep gold within the freshness target, or DuckDB's memory during dbt runs starves Spark (measured on Days 9 and 13).
+
+## Update 2026-11-17
+
+dbt and the API will run on the processing VM inside the Docker network (ADR-012), so the open question of laptop clients resolving the `seaweedfs` storage endpoint no longer applies; the Day 9 spike still decides whether gold is written to Iceberg. Memory reasoning now uses the 12 GB VM.

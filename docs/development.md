@@ -7,7 +7,7 @@
 | OS | Windows 11 Pro | Commands run from Git Bash or PowerShell |
 | CPU / RAM | i7-14650HX (24 logical CPUs), 15.7 GB RAM | ~3.4 GB free with the desktop in use |
 | Docker | Docker Desktop 29.1.3, Compose v2.40.3 | WSL2 backend |
-| Memory available to Docker | 8,170,668,032 bytes (7.6 GiB) | WSL2 default (no `.wslconfig`): the whole stack must fit in this |
+| Memory available to Docker | 8,170,668,032 bytes (7.6 GiB) | WSL2 default (no `.wslconfig`): enough for the local test stack (`make it`); the running pipeline is on the processing VM (12 GB) since 2026-11-17 |
 | uv | 0.9.9 | Python 3.12 pinned in `.python-version` |
 | make | GNU Make 4.4.1 | |
 | Java | not installed | Not needed: Spark runs in a container |
@@ -139,10 +139,10 @@ Times are UTC (a timestamp without an offset is read as UTC). Replaying a window
 - `make tools` (Console), `make ps`, `make logs`, `make stats`, `make down` (keeps data volumes).
 - `make stream` starts the bronze job (builds the image the first time, ~4 min); `make stream-logs` shows one line per micro-batch. Its checkpoint is in the `spark-checkpoints` volume: deleting that volume makes the next run start again from the earliest Kafka offset (duplicates in bronze), so do not, unless the table is dropped too.
 - Remote signing: clients do not need S3 keys; Lakekeeper signs storage requests for them.
-- **Open (Day 5/9):** Lakekeeper tells clients the storage endpoint is `http://seaweedfs:8333`, which resolves only inside the Docker network. Clients inside the network (Spark) are fine; clients on the laptop (DuckDB, dbt, the API) need either to run in the network or an endpoint name that resolves on both sides.
+- **Storage endpoint:** Lakekeeper tells clients the storage endpoint is `http://seaweedfs:8333`, which resolves only inside the Docker network. Spark, Airflow and (planned) dbt/DuckDB and the API all run inside that network on the processing VM, so this is no longer an open issue (it was, while those clients were planned for the laptop). Browser tools that read storage directly, such as the Lakekeeper UI's DuckDB preview, cannot work by design (remote signing, no STS).
 - Ports 5432/5433 (other local databases), 8000/8010/3000/3001/8080/8081 (other projects, Relay) are avoided.
 
-**Memory baseline (2026-11-05, idle, no data):** Redpanda 177.5 MiB, Postgres 116.3 MiB, SeaweedFS 46.6 MiB, Console 40.9 MiB, Lakekeeper 31.0 MiB: **≈ 412 MiB** of ~7.6 GiB. Images ≈ 2.5 GB on disk. Re-measured with data flowing and with Spark (Day 5).
+**Memory baseline on the laptop (2026-11-05, idle, no data):** Redpanda 177.5 MiB, Postgres 116.3 MiB, SeaweedFS 46.6 MiB, Console 40.9 MiB, Lakekeeper 31.0 MiB: **≈ 412 MiB** of ~7.6 GiB. Images ≈ 2.5 GB on disk. Re-measured with data flowing and with Spark (Day 5).
 
 ## 5. Python project
 
@@ -191,7 +191,7 @@ historical rows immediately.
 The stateful query uses a new v2 checkpoint because its plan differs from v1.
 Keep v1 intact; v2 rereads retained bronze, with durable MERGEs preventing extra
 current/revision rows. Kafka DLQ copies may repeat under their stable keys.
-The silver heap is 768 MiB, shuffle partitions two, container cap 2 GiB;
+*(2026-11-17: on the processing VM the heap is 1.5 GiB in a 3 GiB container and batches are capped at 200,000 rows, after an out-of-memory crash on a catch-up batch, findings F23.)* At first the silver heap was 768 MiB, shuffle partitions two, container cap 2 GiB;
 batch materialization uses disk to leave room for Python and native memory.
 The earlier stateless backlog was sampled near 1.4 GiB. The new plan sampled
 1.462 GiB during the real reread, so its original 1.5 GiB cap was raised. Core,

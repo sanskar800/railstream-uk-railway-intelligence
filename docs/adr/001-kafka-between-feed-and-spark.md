@@ -28,3 +28,7 @@ Put a Kafka-API broker between the bridge and Spark, and use **Redpanda** (singl
 - Spark can crash, restart or reprocess from offsets without touching the feed; replay of captured days uses the same topic.
 - One more service to monitor (consumer lag is a first-class metric).
 - If we ever needed features tied to Apache Kafka internals (e.g. Kafka Streams), we would revisit; nothing in the plan needs them.
+
+## Update 2026-11-17
+
+The ~7.6 GiB budget was the laptop's; the stack now runs on a 12 GB cloud VM (ADR-012). The decision is unchanged.

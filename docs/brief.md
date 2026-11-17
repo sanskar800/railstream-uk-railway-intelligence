@@ -28,7 +28,7 @@ Q5 is not an afterthought: a controller acting on a stale screen is worse off th
 
 - **The feed is unreliable:** it goes quiet (weekly outage, network problems), redelivers duplicates, delivers some events late and amends records days later. The system must keep running, say when data is missing, and correct itself.
 - **TRUST reports facts, not causes.** It says where a train gained delay, not why. Reactionary delay is an *inference* (definition in metrics.md) and is labelled as such.
-- **£0 budget, one laptop** (16 GB RAM, ~7.6 GiB for Docker).
+- **£0 budget**: Oracle Cloud Always Free only (a 1 GB capture VM and a 2 OCPU / 12 GB ARM processing VM, ADR-012); the laptop is for development. *(Until 2026-11-17: one laptop, ~7.6 GiB for Docker.)*
 
 ## Out of scope
 

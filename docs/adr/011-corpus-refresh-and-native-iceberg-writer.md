@@ -54,3 +54,7 @@ append therefore makes no extra rows or snapshot.
 Sources: [PyIceberg API](https://py.iceberg.apache.org/api/),
 [PyIceberg REST/S3 configuration](https://py.iceberg.apache.org/configuration/),
 [Airflow image dependency guidance](https://airflow.apache.org/docs/apache-airflow/stable/howto/docker-compose/).
+
+## Update 2026-11-17
+
+Airflow runs on the processing VM (ADR-012), so the laptop-memory argument no longer applies, but avoiding a Spark JVM for an ~11k-row load still does. The writer is single-threaded (findings F22) and is the reference table's only writer; the schedule is Monday and Thursday (CORPUS changes every few weeks).
