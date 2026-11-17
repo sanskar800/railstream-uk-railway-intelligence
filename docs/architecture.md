@@ -38,7 +38,7 @@ Current implementation (2026-11-16): bronze capture and revision-aware silver
 writes are implemented. Silver retains distinct revisions and current planned
 calls (ADR-008); Kafka DLQ publication is at least once with stable source keys.
 Guarded watermarked state and a versioned CORPUS left join are implemented
-(ADR-009). Airflow's local runtime, manual platform-check DAG and daily CORPUS
+(ADR-009). Airflow's local runtime, twice-weekly CORPUS
 download/validate/load workflow are implemented (ADRs 010/011). Gold and serving
 remain planned. Actual silver tables
 are `silver.trust_movement`, `silver.movement_revisions` and

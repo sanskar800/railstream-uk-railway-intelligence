@@ -19,7 +19,7 @@ environment and reuse `trust.locations` for content hashing and deterministic
 STANOX selection. No extra database, Spark server or Docker socket access.
 
 `refresh_corpus` has three tasks: download, validate and load. Schedule it at
-04:00 UTC daily with `catchup=False`, at most one active run, two retries and
+04:00 UTC (daily at first; Monday and Thursday since 2026-11-17, as CORPUS changes every few weeks) with `catchup=False`, at most one active run, two retries and
 one-minute retry delays. The local scheduler must be running for execution;
 this does not move orchestration to the cloud or backfill train movements.
 

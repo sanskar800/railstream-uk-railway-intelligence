@@ -226,7 +226,7 @@ download (Network Rail HTTPS) -> validate (CORPUS + STANOX rules)
                             -> load (Lakekeeper -> Iceberg ref.locations)
 ```
 
-It is enabled on a daily **04:00 UTC** schedule, with two retries, a one-minute
+It is enabled on a **Monday and Thursday 04:00 UTC** schedule (changed from daily on 2026-11-17: CORPUS changes every few weeks), with two retries, a one-minute
 retry delay and one active run. You can also trigger it manually in the UI.
 Open its latest successful run, then each task's logs. The load log reports the
 content version, selected locations and inserted count. A repeated content
@@ -246,7 +246,7 @@ with one directory per run. They are not automatically copied to the laptop's
 `data/reference/` folder.
 
 The laptop and Docker must be on for scheduled tasks. `catchup=False` avoids
-replaying every missed daily reference interval; the latest due refresh may run
+replaying every missed reference interval; the latest due refresh may run
 on startup. The cloud VM continues archiving movements independently. Automated
 movement catch-up from that VM remains future work; it is not supplied by this DAG.
 
