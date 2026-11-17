@@ -264,3 +264,11 @@ Re-running the integration suite during a review of the Day 6–7 work: bronze (
 - Also changed in the review: a capture file with interior corruption is now quarantined byte for byte (`.corrupt-<id>`) and capture continues, instead of the bridge refusing to start (which on the VM would have stopped the 24/7 archive); the Spark CORPUS loader was removed so the reference table has one writer (`make load-corpus` runs the DAG's writer in the Airflow image).
 - Evidence: scenario runs in this session (exit codes and `rows: 4`); Lakekeeper audit log 2026-11-17 12:12 UTC (authorisations only, no refusals).
 
+## F23. Moving to the cloud: 12 days replayed in 10 minutes; an unbounded catch-up batch ran silver out of heap (2026-11-17)
+
+The pipeline moved to an Always Free ARM VM (2 OCPU / 12 GB, ADR-012). The capture VM replayed its whole archive (2026-11-05 14:18 to 2026-11-17 13:44) into the processing VM's Kafka over the private network: **9,128,469 messages in 10 min 3 s, 0 failures**, while live messages flowed in parallel (`kafka sent=722 delivered=722` in the first minute). Bronze processed 200,000-row batches at ~30,000 rows/s, one per minute. Silver routed the first large batch as replay 191,703 / live 490 / future 4 / late 2.
+
+- Silver read bronze with no per-batch limit, so after the replay one micro-batch took millions of rows; its 768 MB driver heap ran out (`OutOfMemoryError: Java heap space` in the revision-ranking window) and the container restarted. A restart re-runs the same logged batch, so it would have crashed in a loop. Fix: `streaming-max-rows-per-micro-batch` = 200,000 (soft: whole files, so ~400k with bronze's ~200k-row files) and a 1.5 GB heap in a 3 GB container. The in-flight batch then completed (1,150,670 movements, 0 restarts) and later batches stayed bounded; silver used ~1.4 GB.
+- No data was lost: the crash happened before commit, and the checkpoint re-ran the batch (as in F17).
+- Evidence: silver container logs 2026-11-17 13:44–14:23 UTC; replay log on the capture VM.
+
