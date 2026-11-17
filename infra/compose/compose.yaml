@@ -1,6 +1,6 @@
 # RailStream local stack. Run through the Makefile (make up / make down / make ps).
 # Profiles: core services have none (always started); `tools` = Redpanda Console;
-# `stream` = the Spark streaming jobs (make stream); `live` = the live bridge (make live).
+# `stream` = the Spark streaming jobs (make stream). Live data comes from the capture VM (ADR-012).
 # `airflow` = local workflow scheduler and UI (make airflow).
 # All ports bind to 127.0.0.1. Credentials are local-development defaults, overridable in .env.
 name: railstream
@@ -22,12 +22,16 @@ services:
       - --mode=dev-container
       - --smp=1
       - --memory=1G
-      - --kafka-addr=internal://0.0.0.0:9092,external://0.0.0.0:19092
-      - --advertise-kafka-addr=internal://redpanda:9092,external://127.0.0.1:19092   # not "localhost": on Windows it may resolve to ::1 first, where nothing listens
+      - --kafka-addr=internal://0.0.0.0:9092,external://0.0.0.0:19092,vcn://0.0.0.0:29092
+      # external: not "localhost" (on Windows it may resolve to ::1 first, where nothing listens).
+      # vcn: the capture VM publishes here over Oracle's private network (ADR-012); on a laptop
+      # both variables are unset and it stays on 127.0.0.1.
+      - --advertise-kafka-addr=internal://redpanda:9092,external://127.0.0.1:19092,vcn://${KAFKA_VCN_HOST:-127.0.0.1}:29092
       - --schema-registry-addr=internal://0.0.0.0:8081,external://0.0.0.0:18081
     ports:
       - 127.0.0.1:19092:19092   # Kafka
       - 127.0.0.1:18081:18081   # Schema Registry
+      - ${KAFKA_VCN_BIND:-127.0.0.1}:29092:29092   # Kafka for the capture VM (private IP only)
     volumes:
       - redpanda-data:/var/lib/redpanda/data
     healthcheck:
@@ -115,31 +119,6 @@ services:
       seaweedfs: {condition: service_healthy}
       lakekeeper: {condition: service_healthy}
     restart: "no"
-
-  # Live feed -> raw files + Kafka, on its own durable subscription (F10; ADR-005). Exactly ONE
-  # live bridge may run per subscription (F6): in the cloud deployment it runs here, not on a laptop.
-  live-bridge:
-    build:
-      context: ../..
-      dockerfile: infra/capture/Dockerfile
-    image: railstream-bridge:dev
-    profiles: ["live"]
-    command: ["python", "-m", "ingest.stomp_bridge", "--subscription", "railstream-live",
-              "--out", "/data/raw/trust-live", "--kafka", "redpanda:9092"]
-    environment:
-      NR_USERNAME: ${NR_USERNAME:?set NR_USERNAME in .env}
-      NR_PASSWORD: ${NR_PASSWORD:?set NR_PASSWORD in .env}
-      NR_STOMP_HOST: ${NR_STOMP_HOST:-publicdatafeeds.networkrail.co.uk}
-      NR_STOMP_PORT: ${NR_STOMP_PORT:-61618}
-    volumes:
-      - ../../data/raw:/data/raw
-    depends_on:
-      redpanda: {condition: service_healthy}
-    mem_limit: 256m
-    logging:
-      driver: json-file
-      options: {max-size: "10m", max-file: "3"}
-    restart: unless-stopped
 
   # Web UI for topics, messages, schemas and consumer lag (task 1.5). On demand: make tools.
   console:

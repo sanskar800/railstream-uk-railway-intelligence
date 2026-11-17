@@ -29,6 +29,9 @@ def producer_config(bootstrap: str, client_id: str) -> dict:
         "linger.ms": 100,  # wait up to 100 ms to fill a batch (a frame is ~27 messages)
         # Give up on a record after 5 minutes (Kafka down); it is reported and replayable.
         "delivery.timeout.ms": 300_000,
+        # Bound the local buffer: the capture VM has 1 GB of RAM. 64 MB holds well over the
+        # 5-minute delivery window at the feed's rate (~15 messages/s of ~0.7 KB).
+        "queue.buffering.max.kbytes": 65_536,
     }
 
 

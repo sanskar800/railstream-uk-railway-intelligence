@@ -4,7 +4,7 @@
 # .env is optional for the local stack: every variable it can set has a local default.
 COMPOSE = docker compose $(if $(wildcard .env),--env-file .env,) -f infra/compose/compose.yaml
 
-.PHONY: help setup test it lint format live replay topics schemas stream stream-logs silver silver-logs load-corpus airflow airflow-logs pull-raw up down ps logs tools stats
+.PHONY: help setup test it lint format replay topics schemas stream stream-logs silver silver-logs load-corpus airflow airflow-logs pull-raw up down ps logs tools stats
 
 help:  ## List targets
 	@uv run python -c "import re; [print(f\"{m[0]:<12} {m[1]}\") for m in re.findall(r\"^([a-z-]+):.*## (.*)$$\", open(\"Makefile\").read(), re.M)]"
@@ -17,9 +17,6 @@ test:  ## Run unit tests (no network or Docker needed)
 
 it:  ## Integration tests against the running stack (make up; Spark image from make stream)
 	uv run pytest -m integration -s tests/integration
-
-live:  ## Live bridge container: own subscription -> data/raw/trust-live + Kafka. ONE per subscription (F6)
-	$(COMPOSE) --profile live up -d --build live-bridge
 
 SPEED ?= 10
 replay:  ## Replay captured hours into Kafka: DAY=YYYY-MM-DD or FROM=.. TO=.. (UTC); SPEED=10, 0 = max
@@ -77,10 +74,10 @@ airflow-logs:  ## Follow Airflow scheduler, API, parser and task logs
 	$(COMPOSE) --profile airflow logs -f --tail=100 airflow
 
 down:  ## Stop the stack (data volumes are kept)
-	$(COMPOSE) --profile tools --profile init --profile stream --profile airflow --profile live down
+	$(COMPOSE) --profile tools --profile init --profile stream --profile airflow down
 
 ps:  ## Show stack status
-	$(COMPOSE) --profile tools --profile stream --profile airflow --profile live ps -a
+	$(COMPOSE) --profile tools --profile stream --profile airflow ps -a
 
 logs:  ## Follow stack logs
 	$(COMPOSE) logs -f --tail=100

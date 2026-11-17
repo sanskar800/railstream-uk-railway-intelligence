@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # One-time setup of the processing VM (Oracle Always Free Ampere A1: ARM, 2 OCPU / 12 GB,
-# Ubuntu 24.04). Runs the whole local stack (make up / stream / silver / airflow). Idempotent.
+# Ubuntu 24.04). Runs Kafka, Spark, Iceberg, Postgres and Airflow; live data arrives from the
+# capture VM over the private network (ADR-012). Idempotent.
 # Usage on the VM: bash setup-core.sh
 set -euo pipefail
 
 REPO_URL="https://github.com/sanskar800/railstream-uk-railway-intelligence.git"
 APP_DIR="$HOME/railstream"
 UV_VERSION="0.9.9"   # same as the laptop and the Docker images
-BRIDGE_UID=10001     # the bridge container's unprivileged user (infra/capture/Dockerfile)
 
 echo "== swap: 4 GB of headroom for JVM spikes; the stack is sized to stay in RAM"
 if ! swapon --show | grep -q /swapfile; then
@@ -38,8 +38,7 @@ else
   git clone "$REPO_URL" "$APP_DIR"
 fi
 
-echo "== raw data directories (live bridge writes here; archive copies land here)"
-mkdir -p "$APP_DIR/data/raw/trust" "$APP_DIR/data/raw/trust-live" "$APP_DIR/data/reference"
-sudo chown -R "$BRIDGE_UID:$BRIDGE_UID" "$APP_DIR/data/raw"
+echo "== reference data directory (no raw data here: the capture VM holds the only raw archive)"
+mkdir -p "$APP_DIR/data/reference"
 
 echo "== done. Next: copy .env to $APP_DIR/.env (chmod 600), log in again (docker group), make up."

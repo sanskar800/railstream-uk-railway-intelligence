@@ -7,6 +7,7 @@ see `make live`.
 
 import argparse
 import logging
+import os
 import signal
 import threading
 from pathlib import Path
@@ -26,7 +27,13 @@ def main() -> None:
         "--subscription", help="use a separate durable subscription with this name (default: the "
         "archive's). Never run two bridges on the same subscription: they split the feed (F6).",
     )  # fmt: skip
-    parser.add_argument("--kafka", metavar="BOOTSTRAP", help="also publish to Kafka at BOOTSTRAP")
+    parser.add_argument(
+        "--kafka",
+        metavar="BOOTSTRAP",
+        default=os.environ.get("BRIDGE_KAFKA_BOOTSTRAP") or None,
+        help="also publish to Kafka at BOOTSTRAP (default: $BRIDGE_KAFKA_BOOTSTRAP; the capture VM "
+        "sets it to the processing VM's private address, ADR-012)",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
