@@ -40,6 +40,7 @@ services:
       timeout: 5s
       retries: 20
     mem_limit: 1280m
+    restart: unless-stopped   # always-on VM: survive crashes and reboots
 
   # S3-compatible object storage for Iceberg files (replaces MinIO: architecture.md §6).
   seaweedfs:
@@ -58,7 +59,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 30
-    mem_limit: 512m
+    mem_limit: 1536m          # 512m was OOM-killed while compaction rewrote large files (F25)
+    restart: unless-stopped
 
   # Shared Postgres: Lakekeeper's catalog database now; Airflow's metadata database later.
   postgres:
@@ -79,6 +81,7 @@ services:
       timeout: 5s
       retries: 20
     mem_limit: 256m
+    restart: unless-stopped
 
   # Iceberg REST catalog (ADR-003): schema migration first, then the server.
   lakekeeper-migrate:
@@ -103,6 +106,7 @@ services:
       timeout: 5s
       retries: 20
     mem_limit: 256m
+    restart: unless-stopped
 
   # One-shot, idempotent: bucket, catalog bootstrap, warehouse. Reuses the SeaweedFS image (sh, wget, weed).
   # In the `init` profile so `up --wait` ignores it; `make up` runs it explicitly after the services are healthy.
@@ -133,6 +137,7 @@ services:
     depends_on:
       redpanda: {condition: service_healthy}
     mem_limit: 256m
+    restart: unless-stopped
 
   # Local development: one parent supervises API, scheduler, parser and triggerer.
   # LocalExecutor needs no Redis/Celery services. Metadata is isolated from Lakekeeper.
