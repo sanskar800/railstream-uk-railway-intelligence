@@ -1,0 +1,66 @@
+from datetime import UTC, datetime
+
+import pytest
+
+from orchestration.maintenance import (
+    POLICIES,
+    compaction_sql,
+    expire_sql,
+    orphan_sql,
+    policy_for,
+    properties_sql,
+)
+
+NOW = datetime(2026, 11, 18, 3, 0, tzinfo=UTC)
+
+
+def test_bronze_compacts_only_days_before_today():
+    sql = compaction_sql(policy_for("bronze.trust_movement"), NOW)
+    assert "table => 'bronze.trust_movement'" in sql
+    assert "where => \"kafka_ts < '2026-11-18 00:00:00'\"" in sql  # today is still being written
+    assert "'min-input-files', '2'" in sql and "'partial-progress.enabled', 'true'" in sql
+
+
+def test_current_calls_skip_the_last_two_days_of_merge_corrections():
+    sql = compaction_sql(policy_for("silver.trust_movement"), NOW)
+    assert "actual_ts < '2026-11-16 00:00:00'" in sql
+
+
+@pytest.mark.parametrize("table", ["silver.rejected_messages", "ref.locations"])
+def test_tiny_tables_are_not_compacted(table):
+    assert compaction_sql(policy_for(table), NOW) is None
+
+
+def test_snapshots_kept_three_days_and_at_least_ten():
+    sql = expire_sql(policy_for("bronze.trust_movement"), NOW)
+    assert "older_than => TIMESTAMP '2026-11-15 03:00:00'" in sql  # silver's position survives
+    assert "retain_last => 10" in sql
+
+
+def test_orphans_use_prefix_listing_and_a_three_day_window():
+    sql = orphan_sql(policy_for("silver.movement_revisions"), NOW)
+    assert "older_than => TIMESTAMP '2026-11-15 03:00:00'" in sql  # Iceberg refuses under 24 h
+    assert "prefix_listing => true" in sql  # the default Hadoop listing has no s3 FileSystem
+
+
+def test_metadata_cleanup_is_switched_on():
+    sql = properties_sql("silver.trust_movement")
+    assert "'write.metadata.delete-after-commit.enabled' = 'true'" in sql
+    assert "'write.metadata.previous-versions-max' = '100'" in sql
+
+
+def test_every_written_table_has_a_policy():
+    assert {p.table for p in POLICIES} == {
+        "bronze.trust_movement",
+        "silver.trust_movement",
+        "silver.movement_revisions",
+        "silver.rejected_messages",
+        "ref.locations",
+    }
+
+
+def test_procedure_arguments_are_literals_not_expressions():
+    # Spark could not bind `current_timestamp() - INTERVAL ...` inside CALL arguments.
+    for policy in POLICIES:
+        for sql in (expire_sql(policy, NOW), orphan_sql(policy, NOW)):
+            assert "current_timestamp" not in sql and "INTERVAL" not in sql

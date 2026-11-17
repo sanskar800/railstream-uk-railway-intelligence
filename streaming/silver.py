@@ -33,6 +33,14 @@ def identifier(value):
     return value
 
 
+# Every commit writes a metadata file and snapshot expiry does not remove them, so keep only the
+# last 100 (as bronze does). Without this, silver accumulated ~1,440 metadata files a day (Day 8).
+TABLE_PROPERTIES = (
+    "'format-version'='2', 'write.metadata.delete-after-commit.enabled'='true', "
+    "'write.metadata.previous-versions-max'='100'"
+)
+
+
 def create_tables(spark, namespace):
     identifier(namespace)
     spark.sql(f"CREATE NAMESPACE IF NOT EXISTS {namespace}")
@@ -40,7 +48,7 @@ def create_tables(spark, namespace):
     for name in ("trust_movement", "movement_revisions"):
         spark.sql(
             f"CREATE TABLE IF NOT EXISTS {namespace}.{name} ({columns}) USING iceberg "
-            "PARTITIONED BY (days(actual_ts)) TBLPROPERTIES ('format-version'='2')"
+            f"PARTITIONED BY (days(actual_ts)) TBLPROPERTIES ({TABLE_PROPERTIES})"
         )
         existing = set(spark.table(f"{namespace}.{name}").columns)
         for field in MOVEMENT_SCHEMA:
@@ -51,7 +59,7 @@ def create_tables(spark, namespace):
                 )
     spark.sql(
         f"CREATE TABLE IF NOT EXISTS {namespace}.rejected_messages "
-        "(record_id STRING, value STRING) USING iceberg"
+        f"(record_id STRING, value STRING) USING iceberg TBLPROPERTIES ({TABLE_PROPERTIES})"
     )
 
 
