@@ -1,6 +1,6 @@
 # RailStream local stack. Run through the Makefile (make up / make down / make ps).
 # Profiles: core services have none (always started); `tools` = Redpanda Console;
-# `stream` = the Spark streaming jobs (make stream).
+# `stream` = the Spark streaming jobs (make stream); `live` = the live bridge (make live).
 # `airflow` = local workflow scheduler and UI (make airflow).
 # All ports bind to 127.0.0.1. Credentials are local-development defaults, overridable in .env.
 name: railstream
@@ -115,6 +115,31 @@ services:
       seaweedfs: {condition: service_healthy}
       lakekeeper: {condition: service_healthy}
     restart: "no"
+
+  # Live feed -> raw files + Kafka, on its own durable subscription (F10; ADR-005). Exactly ONE
+  # live bridge may run per subscription (F6): in the cloud deployment it runs here, not on a laptop.
+  live-bridge:
+    build:
+      context: ../..
+      dockerfile: infra/capture/Dockerfile
+    image: railstream-bridge:dev
+    profiles: ["live"]
+    command: ["python", "-m", "ingest.stomp_bridge", "--subscription", "railstream-live",
+              "--out", "/data/raw/trust-live", "--kafka", "redpanda:9092"]
+    environment:
+      NR_USERNAME: ${NR_USERNAME:?set NR_USERNAME in .env}
+      NR_PASSWORD: ${NR_PASSWORD:?set NR_PASSWORD in .env}
+      NR_STOMP_HOST: ${NR_STOMP_HOST:-publicdatafeeds.networkrail.co.uk}
+      NR_STOMP_PORT: ${NR_STOMP_PORT:-61618}
+    volumes:
+      - ../../data/raw:/data/raw
+    depends_on:
+      redpanda: {condition: service_healthy}
+    mem_limit: 256m
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}
+    restart: unless-stopped
 
   # Web UI for topics, messages, schemas and consumer lag (task 1.5). On demand: make tools.
   console:

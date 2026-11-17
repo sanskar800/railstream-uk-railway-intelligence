@@ -18,8 +18,8 @@ test:  ## Run unit tests (no network or Docker needed)
 it:  ## Integration tests against the running stack (make up; Spark image from make stream)
 	uv run pytest -m integration -s tests/integration
 
-live:  ## Live bridge: own subscription -> data/raw/trust-live + Kafka (needs `make up`; Ctrl+C stops)
-	uv run python -m ingest.stomp_bridge --subscription railstream-live --out data/raw/trust-live --kafka 127.0.0.1:19092
+live:  ## Live bridge container: own subscription -> data/raw/trust-live + Kafka. ONE per subscription (F6)
+	$(COMPOSE) --profile live up -d --build live-bridge
 
 SPEED ?= 10
 replay:  ## Replay captured hours into Kafka: DAY=YYYY-MM-DD or FROM=.. TO=.. (UTC); SPEED=10, 0 = max
@@ -77,10 +77,10 @@ airflow-logs:  ## Follow Airflow scheduler, API, parser and task logs
 	$(COMPOSE) --profile airflow logs -f --tail=100 airflow
 
 down:  ## Stop the stack (data volumes are kept)
-	$(COMPOSE) --profile tools --profile init --profile stream --profile airflow down
+	$(COMPOSE) --profile tools --profile init --profile stream --profile airflow --profile live down
 
 ps:  ## Show stack status
-	$(COMPOSE) --profile tools --profile stream --profile airflow ps -a
+	$(COMPOSE) --profile tools --profile stream --profile airflow --profile live ps -a
 
 logs:  ## Follow stack logs
 	$(COMPOSE) logs -f --tail=100
