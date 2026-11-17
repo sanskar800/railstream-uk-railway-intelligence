@@ -76,28 +76,38 @@ The feed is captured 24/7 on an Oracle Cloud **Always Free** VM (`VM.Standard.E2
 | Run | `cd ~/railstream && docker compose -f infra/capture/compose.yaml up -d --build` (`restart: unless-stopped`, 256 MB memory cap, logs capped at 30 MB) |
 | Logs | `docker compose -f infra/capture/compose.yaml logs -f` (per-minute `frames=… messages=…`; ~28 frames/min at peak) |
 | Update code | `git pull` then the run command again |
-| Get the data | on the laptop: `make pull-raw` copies completed hours into `data/raw/trust/` (never the open hour) |
+| Publish to the cloud | `BRIDGE_KAFKA_BOOTSTRAP=10.0.0.231:29092` in its `.env`: after each disk write and ACK, messages also go to the processing VM's Kafka over the private network (ADR-012); logs `kafka sent=… delivered=… failed=…` each minute |
+| Backup to the laptop | `make pull-raw` copies completed hours into `data/raw/trust/` (never the open hour): the only copy outside the VM, so run it now and then |
 
 Networking notes from setup: the instance needed the "Connect public subnet to internet" quick action (internet gateway + route) and an **ephemeral public IP** added under VNIC → IP administration; neither was created by the instance wizard after the shape was changed.
 
-#### Live bridge on the laptop (`make live`)
+#### Processing VM (the whole pipeline, ADR-012)
 
-Feeds the local pipeline. It uses **its own durable subscription** (`railstream-live`, client-id `<account>-railstream-live`), which receives a full copy of the feed (findings F10), so it runs alongside the VM without splitting the archive. Needs `make up` first.
+Kafka, Spark bronze/silver, Iceberg (SeaweedFS + Lakekeeper), Postgres and Airflow run on a second Always Free VM; the laptop is only for code. Data flow: Network Rail → capture VM bridge → raw archive **and** the processing VM's Kafka (private network) → bronze → silver (→ gold).
 
-- Each frame is written to `data/raw/trust-live/` and acknowledged as on the VM, then its messages are published to Kafka `raw.trust.movement` (one record per TRUST message, key = train id, idempotent producer). Publishing is asynchronous and after the ACK: if Kafka is down, capture continues and the bridge logs `NOT IN KAFKA: frames received <from>–<to>`; that window is refilled from disk with the replay tool.
-- Every 60 s: `frames=… messages=… bytes=… last_frame_age_s=…` (a growing age = quiet feed; a sudden halving of `frames` = a second bridge on the same subscription, F6) and `kafka sent=… delivered=… failed=…`.
-- Stop with Ctrl+C (outstanding Kafka deliveries are flushed). When the laptop is off, the broker keeps the subscription's messages for 5 minutes only; longer gaps are covered by the VM archive.
-- Disk on the VM: check `du -sh data/raw` now and then; daily growth is measured from the capture, not estimated.
+| What | Where |
+|---|---|
+| Machine | `railstream-core`: VM.Standard.A1.Flex, **2 OCPU / 12 GB, ARM**, Ubuntu 24.04, 150 GB boot volume (created 2026-11-17). `CORE_HOST` in the laptop's `.env` |
+| Setup (one-off, idempotent) | `scp infra/cloud/setup-core.sh` to the VM, `bash setup-core.sh`: 4 GB swap, security updates, Docker, make, uv 0.9.9, clone. Then copy `.env` (mode 600) and add `KAFKA_VCN_BIND`/`KAFKA_VCN_HOST=10.0.0.231` |
+| Network | Kafka's `vcn` listener is bound to the private IP only; the subnet security list allows **TCP 29092 from 10.0.0.0/24** (the two VMs). Verified closed from the internet. All UIs listen on the VM's localhost |
+| Start | on the VM: `make up`, `make stream`, `make airflow` (CORPUS via the `refresh_corpus` DAG), `make silver`, optionally `make tools` |
+| Deploy code | laptop: commit + push; VM: `git pull`, then the relevant `make` target (rebuilds images) |
+| Look at it | laptop: `make tunnel` → Console http://localhost:8085, Spark UI 4040 (bronze) / 4041 (silver), Airflow 8086, Lakekeeper http://localhost:8181/ui |
+| Query it | laptop: `make sql Q="SELECT count(*) FROM silver.trust_movement"` (runs in a short-lived Spark container on the VM; ~20 s) |
+| Keep it running | a stopped A1 instance can fail to restart for lack of capacity, and an idle one may be reclaimed; the running pipeline is never idle |
+
+Rebuilding the tables (e.g. after a fresh VM): replay the archive **from the capture VM** straight into the processing VM's Kafka, so no raw copy is stored twice:
+`docker compose -f infra/capture/compose.yaml run --rm --no-deps -e BRIDGE_KAFKA_BOOTSTRAP= stomp-bridge python -m ingest.replay --root /data/raw/trust --from <start> --to <end> --speed 0 --kafka 10.0.0.231:29092`. Measured 2026-11-17: 9,128,469 messages (12 days) in 10 min 3 s, 0 failures.
 
 #### Replay (`make replay`)
 
-Re-publishes captured frames to `raw.trust.movement` through the same producer as the live bridge, with the original receive time in the `received_at` header and `source=replay`. Reads `data/raw/trust/` (the VM archive; run `make pull-raw` first) unless `--root` says otherwise.
+Re-publishes captured frames to `raw.trust.movement` through the same producer as the bridge, with the original receive time in the `received_at` header and `source=replay`. In the cloud it runs on the capture VM (command above); `make replay` is the local-development form, reading `data/raw/trust/` (`make pull-raw` first) into the laptop's Kafka.
 
 | Use | Command |
 |---|---|
 | Development: a day at 10× (2.4 h), with real bursts and quiet periods | `make replay DAY=2026-11-06` |
-| Backfill after the laptop was off (no waiting; measured ~40k messages/s, so a day takes ~20 s) | `make replay DAY=2026-11-06 SPEED=0` |
-| Refill a window the live bridge logged as `NOT IN KAFKA` | `make replay FROM=2026-11-07T15:00 TO=2026-11-07T15:05 SPEED=0` |
+| Local backfill (no waiting; measured ~40k messages/s on the laptop, so a day takes ~20 s) | `make replay DAY=2026-11-06 SPEED=0` |
+| Refill a window the bridge logged as `NOT IN KAFKA` | the capture-VM command above with that `--from`/`--to` |
 
 Times are UTC (a timestamp without an offset is read as UTC). Replaying a window that is already in Kafka publishes it again; silver dedupes. Measured 2026-11-07: the 08:00 UTC peak hour of 2026-11-06 (52,386 messages) in 1.3 s at full speed; 5 minutes at 10× in 29.97 s (expected 29.8 s).
 

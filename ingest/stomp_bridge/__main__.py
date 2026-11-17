@@ -1,8 +1,7 @@
-"""Entry point: `uv run python -m ingest.stomp_bridge [--out DIR] [--subscription NAME]
-[--kafka BOOTSTRAP] [--seconds N]`.
+"""Entry point: `python -m ingest.stomp_bridge [--out DIR] [--kafka BOOTSTRAP] [--seconds N]`.
 
-Archive bridge (the VM): the defaults. Live bridge (the laptop): its own subscription plus Kafka,
-see `make live`.
+Runs on the capture VM (infra/capture): writes the raw archive and, when BRIDGE_KAFKA_BOOTSTRAP is
+set, also publishes to the processing VM's Kafka (ADR-012). One bridge, one subscription.
 """
 
 import argparse
@@ -24,10 +23,6 @@ def main() -> None:
     parser.add_argument("--seconds", type=float, help="stop after N seconds (default: run forever)")
     parser.add_argument("--stats-interval", type=float, default=60)
     parser.add_argument(
-        "--subscription", help="use a separate durable subscription with this name (default: the "
-        "archive's). Never run two bridges on the same subscription: they split the feed (F6).",
-    )  # fmt: skip
-    parser.add_argument(
         "--kafka",
         metavar="BOOTSTRAP",
         default=os.environ.get("BRIDGE_KAFKA_BOOTSTRAP") or None,
@@ -48,8 +43,6 @@ def main() -> None:
         timer.start()
 
     settings = BridgeSettings()
-    if args.subscription:
-        settings = settings.for_subscription(args.subscription)
     sink = TrustProducer.connect(args.kafka, source="live") if args.kafka else None
     run(settings, RawCaptureWriter(args.out), stop, args.stats_interval, sink)
 

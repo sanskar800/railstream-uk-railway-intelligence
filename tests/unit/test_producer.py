@@ -3,7 +3,6 @@ import logging
 from datetime import UTC, datetime, timedelta
 
 from ingest.stomp_bridge.bridge import produce_message
-from ingest.stomp_bridge.config import BridgeSettings
 from ingest.stream.producer import TrustProducer, producer_config, to_records
 
 T0 = datetime(2026, 11, 7, 15, 0, 1, tzinfo=UTC)
@@ -96,14 +95,3 @@ def test_producer_is_idempotent_with_acks_all():
     config = producer_config("127.0.0.1:19092", "railstream-live")
     assert config["enable.idempotence"] is True
     assert config["acks"] == "all"
-
-
-def test_live_subscription_gets_its_own_client_id():
-    archive = BridgeSettings(username="me@example.com", password="x", _env_file=None)
-    live = archive.for_subscription("railstream-live")
-
-    assert (live.subscription_name, live.effective_client_id) == (
-        "railstream-live",
-        "me@example.com-railstream-live",
-    )
-    assert archive.subscription_name == "railstream-trust"  # original unchanged

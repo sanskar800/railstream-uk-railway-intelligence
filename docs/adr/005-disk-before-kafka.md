@@ -20,7 +20,7 @@ Option 1, while Kafka runs on the laptop. The rule behind it: **acknowledge only
 ## Consequences
 
 - Kafka is a derived, replayable stream; the raw files are the source of truth. A Kafka outage never stops capture. Verified: a 41 s Redpanda outage during a live run lost nothing and duplicated nothing (findings F12).
-- Two copies exist on the laptop side (the VM archive and `data/raw/trust-live`); the VM archive remains canonical.
+- Two copies exist on the laptop side (the VM archive and `data/raw/trust-live`); the VM archive remains canonical. *(Superseded 2026-11-17 by ADR-012: the capture VM's single bridge publishes to the cloud Kafka, so there is one bridge and one raw copy; the laptop-side live bridge and `trust-live` were removed. The disk-before-Kafka order itself still holds.)*
 - Bridge → Kafka is at least once: a STOMP redelivery after a reconnect, or a replay over an already-published window, publishes a message again. Silver dedupes (metrics.md §1).
 - **Cloud evolution:** if the whole stack is hosted with an always-on, replicated Kafka, Kafka becomes the most reliable store and the rule selects option 2: one bridge, acknowledging on Kafka delivery; the bronze Iceberg table (raw payload) becomes the long-term archive, and the disk step, the VM archive and `make pull-raw` go away. Downstream of Kafka nothing changes. The listener already takes the writer and the Kafka sink as separate parts, so this is a new acknowledgement mode, not a rewrite.
 - Wrong if: the laptop's disk becomes a bottleneck for the ACK (fsync per frame; ~30 frames/min, so not expected), or Kafka failures go unnoticed because the `NOT IN KAFKA` warning is not monitored (Day 12 alerting).
