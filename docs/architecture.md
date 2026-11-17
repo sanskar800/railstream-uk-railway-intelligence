@@ -79,6 +79,7 @@ The roadmap spec is the source of truth. Changes, with the reason and the date a
 | Spec | Change | Reason | Accepted |
 |---|---|---|---|
 | Everything runs on Compose locally (cloud only for an optional 48 h run) | The STOMP bridge runs 24/7 on an Oracle Cloud **Always Free** VM; processing stays local | A laptop cannot capture around the clock, and the feed has no history; £0 | 2026-11-05 |
+| Processing on the laptop (Compose) | The whole Compose stack runs on a second Always Free VM (Ampere A1, 2 OCPU / 12 GB, ARM); the capture VM's bridge also publishes to its Kafka over the private network; no laptop in the data path (ADR-012) | User requirement (no laptop in the middle); £0 indefinitely, unlike trial credits | 2026-11-17 |
 | Reference data includes SMART | SMART is OPTIONAL | Only useful with the TD feed, which is not used | 2026-11-03 |
 | Punctuality "by operator, route and hour" | By operator, location and hour | TRUST carries no route names; invented route groupings would be guesswork | 2026-11-05 |
 | MinIO as local object storage | **SeaweedFS** (S3-compatible, Apache-2.0) | MinIO's community images are no longer published on Docker Hub or Quay, not even old tags (findings F7); every engine talks plain S3, so only one service and an endpoint changed | 2026-11-05 |
