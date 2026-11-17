@@ -1,0 +1,12 @@
+[Unit]
+Description=RailStream: hourly raw-archive backup
+
+[Timer]
+# At :15, after the previous hour has been compressed. Persistent: a run missed while the VM
+# was down happens at the next boot.
+OnCalendar=*-*-* *:15:00
+RandomizedDelaySec=120
+Persistent=true
+
+[Install]
+WantedBy=timers.target

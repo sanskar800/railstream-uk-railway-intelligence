@@ -1,0 +1,12 @@
+[Unit]
+Description=RailStream: back up completed raw hours to Oracle Object Storage
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+ExecStart=/home/ubuntu/railstream/infra/capture/backup-archive.sh
+# Low priority: the bridge's fsync-then-ACK path must never wait for the backup.
+Nice=10
+IOSchedulingClass=idle
