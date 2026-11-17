@@ -19,29 +19,32 @@ from pyspark.sql import SparkSession
 CATALOG = "lake"
 
 
-def build_session(app_name: str) -> SparkSession:
+def spark_conf() -> dict[str, str]:
+    """Spark settings shared by the streaming jobs and the Spark Connect server (one source)."""
     env = os.environ.get
-    jars = ",".join(sorted(glob.glob("/opt/jars/*.jar")))
-    builder = (
-        SparkSession.builder.appName(app_name)
-        .master(env("SPARK_MASTER", "local[2]"))  # 2 cores: the laptop also runs the stack
-        .config("spark.driver.memory", env("SPARK_DRIVER_MEMORY", "1g"))
-        .config("spark.jars", jars)
-        .config("spark.sql.session.timeZone", "UTC")
-        .config("spark.sql.shuffle.partitions", env("SPARK_SHUFFLE_PARTITIONS", "4"))
-        .config("spark.ui.port", "4040")
-        .config("spark.ui.showConsoleProgress", "false")  # progress bars garble logs
-        .config(
-            "spark.sql.extensions",
-            "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions",
-        )
-        .config(f"spark.sql.catalog.{CATALOG}", "org.apache.iceberg.spark.SparkCatalog")
-        .config(f"spark.sql.catalog.{CATALOG}.type", "rest")
-        .config(
-            f"spark.sql.catalog.{CATALOG}.uri", env("CATALOG_URI", "http://lakekeeper:8181/catalog")
-        )
-        .config(f"spark.sql.catalog.{CATALOG}.warehouse", env("WAREHOUSE", "railstream"))
-        .config(f"spark.sql.catalog.{CATALOG}.io-impl", "org.apache.iceberg.aws.s3.S3FileIO")
-        .config("spark.sql.defaultCatalog", CATALOG)
-    )
+    return {
+        "spark.driver.memory": env("SPARK_DRIVER_MEMORY", "1g"),
+        "spark.jars": ",".join(sorted(glob.glob("/opt/jars/*.jar"))),
+        "spark.sql.session.timeZone": "UTC",
+        "spark.sql.shuffle.partitions": env("SPARK_SHUFFLE_PARTITIONS", "4"),
+        "spark.ui.port": "4040",
+        "spark.ui.showConsoleProgress": "false",  # progress bars garble logs
+        "spark.sql.extensions": "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions",
+        f"spark.sql.catalog.{CATALOG}": "org.apache.iceberg.spark.SparkCatalog",
+        f"spark.sql.catalog.{CATALOG}.type": "rest",
+        f"spark.sql.catalog.{CATALOG}.uri": env("CATALOG_URI", "http://lakekeeper:8181/catalog"),
+        f"spark.sql.catalog.{CATALOG}.warehouse": env("WAREHOUSE", "railstream"),
+        f"spark.sql.catalog.{CATALOG}.io-impl": "org.apache.iceberg.aws.s3.S3FileIO",
+        "spark.sql.defaultCatalog": CATALOG,
+    }
+
+
+def master() -> str:
+    return os.environ.get("SPARK_MASTER", "local[2]")  # 2 cores: the VM's whole CPU
+
+
+def build_session(app_name: str) -> SparkSession:
+    builder = SparkSession.builder.appName(app_name).master(master())
+    for key, value in spark_conf().items():
+        builder = builder.config(key, value)
     return builder.getOrCreate()

@@ -176,6 +176,7 @@ services:
       postgres: {condition: service_healthy}
       lakekeeper: {condition: service_healthy}
       seaweedfs: {condition: service_healthy}
+      spark-connect: {condition: service_healthy}
     healthcheck:
       test: ["CMD", "python", "/railstream/infra/airflow/health.py"]
       interval: 15s
@@ -208,6 +209,32 @@ services:
       redpanda: {condition: service_healthy}
       lakekeeper: {condition: service_healthy}
     mem_limit: 1536m            # 1 GB driver heap + JVM overhead + Python
+    restart: unless-stopped
+
+  # Spark Connect server for Airflow's batch jobs (Iceberg maintenance, ADR-015): Airflow sends SQL
+  # over gRPC with pyspark-client, so it needs no Java and no Docker socket. Network-internal only.
+  spark-connect:
+    build:
+      context: ../..
+      dockerfile: infra/spark/Dockerfile
+    image: railstream-spark:dev
+    profiles: ["airflow"]
+    command: ["python", "-m", "streaming.connect_server"]
+    environment:
+      CATALOG_URI: http://lakekeeper:8181/catalog
+      WAREHOUSE: railstream
+      SPARK_DRIVER_MEMORY: 1g
+    ports:
+      - 127.0.0.1:4042:4040     # its Spark UI (maintenance jobs), via make tunnel
+    depends_on:
+      lakekeeper: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('localhost', 15002), 2)"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    mem_limit: 1536m
     restart: unless-stopped
 
   # Bronze -> typed/current movements, revision history and DLQ (Day 6).

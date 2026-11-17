@@ -19,7 +19,8 @@ from dotenv import dotenv_values
 
 ROOT = Path(__file__).resolve().parent.parent
 PORTS = {8085: "Redpanda Console", 4040: "Spark UI (bronze)", 4041: "Spark UI (silver)",
-         8086: "Airflow", 8181: "Lakekeeper catalog (open /ui)"}  # fmt: skip
+         8086: "Airflow", 8181: "Lakekeeper catalog (open /ui)",
+         4042: "Spark UI (maintenance, Spark Connect)"}  # fmt: skip
 
 
 def main() -> None:
