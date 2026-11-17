@@ -18,6 +18,7 @@ An ADR records **one** significant decision: the context, the options considered
 | [010](010-local-airflow-runtime.md) | Local Airflow standalone/LocalExecutor, isolated metadata in shared Postgres and one-task concurrency | Accepted (2026-11-16) |
 | [011](011-corpus-refresh-and-native-iceberg-writer.md) | Daily CORPUS download/validate/load, native Python Iceberg writer and immutable content versions | Accepted (2026-11-16) |
 | [012](012-cloud-deployment.md) | The pipeline runs on an Always Free ARM VM (2 OCPU / 12 GB); the capture VM's single bridge feeds its Kafka over the private network; no laptop in the data path | Accepted (2026-11-17) |
+| [013](013-raw-archive-backup.md) | Hourly append-only backup of the raw archive to Object Storage; instance-principal auth, no delete or overwrite permission | Accepted (2026-11-17) |
 
 Smaller decisions and accepted deviations from the spec are listed in [architecture.md §6](../architecture.md#6-deviations-from-the-original-specification); what the build revealed is in [findings.md](../findings.md).
 

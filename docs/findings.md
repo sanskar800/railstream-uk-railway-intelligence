@@ -272,3 +272,11 @@ The pipeline moved to an Always Free ARM VM (2 OCPU / 12 GB, ADR-012). The captu
 - No data was lost: the crash happened before commit, and the checkpoint re-ran the batch (as in F17).
 - Evidence: silver container logs 2026-11-17 13:44–14:23 UTC; replay log on the capture VM.
 
+## F24. The archive backup is verified, idempotent, append-only and restorable (2026-11-17)
+
+First backup of the capture VM's archive to Object Storage (ADR-013): **288 completed hours, 397.5 MiB, in 19 s** (24.7 MiB/s), followed by a one-way check: 288 matching, 0 differences. A second run copied **0 files** (counted for that run's systemd invocation only; a first count over a one-minute journal window had wrongly included the previous run). An attempt from the VM to delete `trust/date=2026-11-06/hour=08.jsonl.gz` was **refused** (Oracle answers 404 to an unauthorised caller rather than revealing the object) and the object was still listed afterwards. Restoring that hour gave a **byte-identical** file (same SHA-256) containing **52,386 messages**, the same count measured for that hour on Day 3.
+
+- Consequence: history now survives loss of the capture VM's disk, with at most ~1 hour at risk. Live-capture gaps are not addressed by a backup; alerting and a second collector are the next items of the single-point-of-failure review.
+- The two VMs are in different availability domains (capture AD-3, processing AD-1), read from the instance metadata service.
+- Evidence: `journalctl -u railstream-backup` on the capture VM, 2026-11-17 14:4x–14:5x UTC; commands in this session.
+

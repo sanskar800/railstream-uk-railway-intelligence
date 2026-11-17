@@ -78,7 +78,9 @@ The feed is captured 24/7 on an Oracle Cloud **Always Free** VM (`VM.Standard.E2
 | Logs | `docker compose -f infra/capture/compose.yaml logs -f` (per-minute `frames=… messages=…`; ~28 frames/min at peak) |
 | Update code | `git pull` then the run command again |
 | Publish to the cloud | `BRIDGE_KAFKA_BOOTSTRAP=10.0.0.231:29092` in its `.env`: after each disk write and ACK, messages also go to the processing VM's Kafka over the private network (ADR-012); logs `kafka sent=… delivered=… failed=…` each minute |
-| Backup to the laptop | `make pull-raw` copies completed hours into `data/raw/trust/` (never the open hour): the only copy outside the VM, so run it now and then |
+| Off-VM backup (ADR-013) | Hourly at :15 to Object Storage bucket `railstream-raw-archive` (`trust/…`), then verified. Install: `bash infra/capture/install-backup.sh` after the console prerequisites (bucket, dynamic group `railstream-capture`, policy `railstream-archive-backup`) and `BACKUP_NAMESPACE` in `.env`. Logs: `journalctl -u railstream-backup`; next run: `systemctl list-timers railstream-backup.timer` |
+| Restore an hour | on the VM: `rclone copyto oci:railstream-raw-archive/trust/date=…/hour=….jsonl.gz <file>` with the same `RCLONE_CONFIG_OCI_*` variables as `backup-archive.sh` |
+| Laptop copy | `make pull-raw` copies completed hours into `data/raw/trust/` (never the open hour): a third copy |
 
 Networking notes from setup: the instance needed the "Connect public subnet to internet" quick action (internet gateway + route) and an **ephemeral public IP** added under VNIC → IP administration; neither was created by the instance wizard after the shape was changed.
 
