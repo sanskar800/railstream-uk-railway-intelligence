@@ -4,7 +4,7 @@
 # .env is optional for the local stack: every variable it can set has a local default.
 COMPOSE = docker compose $(if $(wildcard .env),--env-file .env,) -f infra/compose/compose.yaml
 
-.PHONY: help setup test it tunnel lint format replay topics schemas stream stream-logs silver silver-logs load-corpus airflow airflow-logs pull-raw up down ps logs tools stats
+.PHONY: help setup test it tunnel sql lint format replay topics schemas stream stream-logs silver silver-logs load-corpus airflow airflow-logs pull-raw up down ps logs tools stats
 
 help:  ## List targets
 	@uv run python -c "import re; [print(f\"{m[0]:<12} {m[1]}\") for m in re.findall(r\"^([a-z-]+):.*## (.*)$$\", open(\"Makefile\").read(), re.M)]"
@@ -22,8 +22,13 @@ SPEED ?= 10
 replay:  ## Replay captured hours into Kafka: DAY=YYYY-MM-DD or FROM=.. TO=.. (UTC); SPEED=10, 0 = max
 	uv run python -m ingest.replay $(if $(DAY),--day $(DAY),--from $(FROM) --to $(TO)) --speed $(SPEED)
 
-tunnel:  ## Open the cloud UIs on localhost: Console 8085, Spark 4040/4041, Airflow 8086 (Ctrl+C closes)
+tunnel:  ## Open the cloud UIs on localhost: Console 8085, Spark 4040/4041, Airflow 8086, Lakekeeper 8181/ui
 	uv run python scripts/tunnel.py
+
+# Q reaches the script as an environment variable, so no shell re-parses * or quotes in the SQL.
+export Q
+sql:  ## Query the cloud tables: make sql Q="SELECT count(*) FROM silver.trust_movement"
+	uv run python scripts/cloud_sql.py
 
 pull-raw:  ## Copy completed hour files from the capture VM (CAPTURE_HOST in .env)
 	uv run python scripts/pull_raw.py

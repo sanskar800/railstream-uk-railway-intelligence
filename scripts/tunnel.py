@@ -2,7 +2,8 @@
 
     uv run python scripts/tunnel.py      # host from CORE_HOST in .env (make tunnel)
 
-Console http://localhost:8085, Spark UI 4040 (bronze) and 4041 (silver), Airflow 8086. The UIs
+Console http://localhost:8085, Spark UI 4040 (bronze) and 4041 (silver), Airflow 8086,
+Lakekeeper http://localhost:8181/ui (tables, schemas, snapshots). The UIs
 listen on the VM's 127.0.0.1 only; nothing is exposed to the internet (ADR-012).
 """
 
@@ -18,7 +19,7 @@ from dotenv import dotenv_values
 
 ROOT = Path(__file__).resolve().parent.parent
 PORTS = {8085: "Redpanda Console", 4040: "Spark UI (bronze)", 4041: "Spark UI (silver)",
-         8086: "Airflow"}  # fmt: skip
+         8086: "Airflow", 8181: "Lakekeeper catalog (open /ui)"}  # fmt: skip
 
 
 def main() -> None:
