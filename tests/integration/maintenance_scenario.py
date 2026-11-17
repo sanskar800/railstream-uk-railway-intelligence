@@ -8,7 +8,7 @@ from airflow.dag_processing.dagbag import DagBag
 
 from orchestration.maintenance import TablePolicy, connect, maintain_table, record_run
 
-bag = DagBag(dag_folder="/opt/airflow/dags", include_examples=False)
+bag = DagBag(dag_folder="/opt/airflow/dags")
 assert not bag.import_errors, bag.import_errors
 dag = bag.dags["iceberg_maintenance"]
 order = ["maintain_bronze_trust_movement", "maintain_silver_movement_revisions",
