@@ -280,3 +280,13 @@ First backup of the capture VM's archive to Object Storage (ADR-013): **288 comp
 - The two VMs are in different availability domains (capture AD-3, processing AD-1), read from the instance metadata service.
 - Evidence: `journalctl -u railstream-backup` on the capture VM, 2026-11-17 14:4x–14:5x UTC; commands in this session.
 
+## F25. A maintenance run OOM-killed the storage; the cloud stack had no restart policies; nothing was lost (2026-11-17)
+
+The first manual run of `iceberg_maintenance` on the real tables compacted silver partitions through Spark Connect. SeaweedFS, limited to 512 MB, was **OOM-killed** (`OOMKilled=true`) while large rewritten files passed through it, and it **stayed down**: the core services (Redpanda, SeaweedFS, Postgres, Lakekeeper, Console) had no restart policy, a laptop-era assumption that `make up` is run by hand. Without storage, the maintenance task failed (`UnknownHostException: seaweedfs`), bronze and silver crash-looped (11 and 14 restarts), and the capture path was unaffected.
+
+- Fix: `restart: unless-stopped` on every long-running service (also covers VM reboots) and SeaweedFS raised to 1.5 GB. Recovery was automatic once storage returned: bronze resumed from its checkpoint; the capture bridge reported `failed=0` throughout (its buffer absorbed the brief Redpanda recreate: sent 811 / delivered 779, then 849 / 881).
+- **No loss, no duplicates:** auditing bronze afterwards, 9,284,095 rows = 9,284,095 distinct offsets, each partition contiguous from 0, so Kafka plus checkpoints carried the stream across the outage, as the spec's "storage unavailable" scenario requires.
+- **Monitoring gap:** `feed_age_seconds` watches Kafka, which stayed fresh, so no alarm fired while the lakehouse was down for ~10 minutes. Lakehouse (bronze/silver) freshness is added to Day 12.
+- Lessons: an always-on host needs restart policies everywhere; memory limits sized for steady streaming must be re-checked for batch jobs; freshness must be measured where data is consumed, not only where it enters.
+- Evidence: container states and restart counts, Spark Connect and silver logs, and the bronze audit, 2026-11-17 16:52–17:07 UTC.
+
