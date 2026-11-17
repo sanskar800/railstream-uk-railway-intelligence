@@ -3,9 +3,12 @@
 FROM python:3.12-slim-bookworm
 
 # Spark 4.1 runs on Java 17 or 21; Debian bookworm ships OpenJDK 17. procps: Spark's scripts use ps.
+# The symlink gives an architecture-neutral JAVA_HOME: the package path ends in -amd64 or -arm64
+# (the cloud VM is ARM).
 RUN apt-get update \
     && apt-get install -y --no-install-recommends openjdk-17-jre-headless procps curl ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && ln -s "$(dirname "$(dirname "$(readlink -f /usr/bin/java)")")" /usr/lib/jvm/java-17
 
 # Connector jars, pinned and checked against Maven Central's SHA-1 (downloaded at build time only).
 # Iceberg 1.12.0 is the newest release with a Spark 4.1 runtime; there is none yet for Spark 4.2+.
@@ -27,7 +30,7 @@ ENV PYTHONUNBUFFERED=1 \
     UV_PYTHON_DOWNLOADS=never \
     UV_PROJECT_ENVIRONMENT=/opt/venv \
     PATH=/opt/venv/bin:$PATH \
-    JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+    JAVA_HOME=/usr/lib/jvm/java-17
 
 RUN pip install --no-cache-dir uv==0.9.9
 WORKDIR /app
