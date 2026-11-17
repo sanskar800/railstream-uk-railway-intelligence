@@ -187,6 +187,10 @@ def main():
     parser.add_argument("--checkpoint", default="/checkpoints/silver_trust_movement_v2")
     parser.add_argument("--reference-table", default="ref.locations", type=identifier)
     parser.add_argument("--watermark-seconds", type=int, default=900)
+    # Bound each micro-batch (Iceberg source option). Without it, a catch-up after a replay
+    # takes every new bronze snapshot at once: one batch of millions of rows ran the driver out
+    # of heap on 2026-11-17 (findings F23). Bronze writes ~200k-row files, so this is ~1 file.
+    parser.add_argument("--max-rows-per-batch", type=int, default=200_000)
     parser.add_argument("--trigger", default="1 minute")
     parser.add_argument("--available-now", action="store_true")
     args = parser.parse_args()
@@ -197,7 +201,9 @@ def main():
     create_tables(spark, args.namespace)
     if not spark.catalog.tableExists(args.reference_table):
         raise ValueError("load CORPUS first with make load-corpus")
-    source = spark.readStream.table(args.source)
+    source = spark.readStream.option(
+        "streaming-max-rows-per-micro-batch", args.max_rows_per_batch
+    ).table(args.source)
     routed = prepare_stream(source, args.watermark_seconds)
     writer = routed.writeStream.option("checkpointLocation", args.checkpoint).foreachBatch(
         lambda batch, bid: process_classified_batch(

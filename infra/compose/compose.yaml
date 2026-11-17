@@ -222,7 +222,7 @@ services:
       KAFKA_BOOTSTRAP: redpanda:9092
       CATALOG_URI: http://lakekeeper:8181/catalog
       WAREHOUSE: railstream
-      SPARK_DRIVER_MEMORY: 768m
+      SPARK_DRIVER_MEMORY: 1536m   # 768m ran out of heap on a large catch-up batch (F23)
       SPARK_SHUFFLE_PARTITIONS: "2"
     ports:
       - 127.0.0.1:4041:4040
@@ -231,7 +231,7 @@ services:
     depends_on:
       redpanda: {condition: service_healthy}
       lakekeeper: {condition: service_healthy}
-    mem_limit: 2048m            # real silver reread sampled 1.462 GiB; reserve JVM/native headroom
+    mem_limit: 3072m            # 1.5 GB heap + JVM overhead + Python UDF workers (cloud VM: 12 GB)
     restart: unless-stopped
 
 volumes:
