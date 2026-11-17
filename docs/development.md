@@ -27,6 +27,7 @@
 - Why: Redpanda, SeaweedFS, Postgres, Spark and Airflow all run as containers.
 - Check: `docker info --format '{{.MemTotal}}'` prints the memory available to Docker (fails if Docker Desktop is not running).
 - Verify: `docker compose version`.
+- **Disk space on Windows:** Docker keeps everything in one virtual disk, `%LOCALAPPDATA%\Docker\wsl\disk\docker_data.vhdx`, which grows but does not shrink when images or build cache are deleted. On 2026-11-17 it had grown to 155 GB while Docker used ~27 GB. To give the space back: `docker builder prune -af` and `docker image prune -f`, then mark the freed blocks with `docker run --rm --privileged --pid=host alpine:3.20 nsenter -t 1 -m -- fstrim -av`, then `docker desktop stop` (Docker compacts the file on stop) and `docker desktop start`. Result: 155 GB → 31 GB, C: free 73 → 198 GB; no admin rights or data loss.
 
 ### make
 - Why: one short, documented entry point per task (`make help` lists them).
