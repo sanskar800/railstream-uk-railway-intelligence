@@ -128,7 +128,8 @@ performance or abrupt-kill recovery.
 
 ## CORPUS versions and unknown stations
 
-`make load-corpus` selects one row per STANOX, preferring a nonempty CRS, then
+The reference loader (`orchestration/corpus.py`, the only writer: Airflow's `refresh_corpus`
+DAG and `make load-corpus`) selects one row per STANOX, preferring a nonempty CRS, then
 name, then TIPLOC, with a canonical lexical tie-break. It hashes uncompressed
 content, loads immutable `(stanox, reference_version)` rows into `ref.locations`,
 and treats repeating the same file as a no-op. The most recently loaded version

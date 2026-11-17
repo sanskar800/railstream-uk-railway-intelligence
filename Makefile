@@ -60,8 +60,9 @@ stream-logs:  ## Follow the Spark job's per-batch log
 silver:  ## Start silver after make up, make stream and make load-corpus (UI on port 4041)
 	$(COMPOSE) --profile stream up -d --build spark-silver
 
-load-corpus:  ## Load the downloaded CORPUS as an immutable reference version (needs core stack)
-	$(COMPOSE) --profile stream run --rm --no-deps -v "$(CURDIR)/data/reference:/reference:ro" spark-silver python -m streaming.locations /reference/CORPUSExtract.json.gz
+load-corpus:  ## Load data/reference/CORPUSExtract.json.gz with the DAG's writer (Airflow need not run)
+	$(COMPOSE) --profile airflow build airflow
+	$(COMPOSE) --profile airflow run --rm --no-deps -v "$(CURDIR)/data/reference:/reference:ro" airflow python -m orchestration.corpus
 
 silver-logs:  ## Follow silver batch counts (movements / rejects / other TRUST types)
 	$(COMPOSE) --profile stream logs -f spark-silver

@@ -34,25 +34,42 @@ def capture_files(root: Path) -> list[Path]:
     return [p if p.exists() else p.with_suffix(".jsonl.gz") for p in sorted(hours)]
 
 
-def recover_tail(path: Path) -> None:
-    """Repair only an unterminated final append; preserve damaged bytes before truncating.
+def quarantine(path: Path, reason: str) -> Path:
+    """Move a whole capture file aside, byte for byte, so capture can continue."""
+    target = path.with_name(f"{path.name}.corrupt-{uuid4().hex}")
+    os.replace(path, target)
+    log.error(
+        "CAPTURE FILE QUARANTINED: %s -> %s (%s). Capture continues; this hour is excluded "
+        "from compression, pull-raw and replay until repaired by hand (docs/recovery.md).",
+        path, target.name, reason,
+    )  # fmt: skip
+    return target
 
-    Newline-terminated or interior corruption is an error, never silently discarded.
+
+def recover_tail(path: Path) -> bool:
+    """Repair an unterminated final append; return False if the file had to be quarantined.
+
+    An unterminated final line (a crash mid-append) is preserved in a `.damaged-*` file and
+    truncated away. Newline-terminated or interior corruption is never repaired or discarded
+    automatically: the whole file is quarantined, because stopping the bridge would lose the
+    live feed, which matters more than one damaged hour that is kept for inspection.
     Call only on closed plain files, with a single capture writer owning the directory.
     """
     if not path.exists():
-        return
+        return True
     with path.open("r+b") as fh:
+        corrupt_at = None
         while True:
             offset = fh.tell()
             line = fh.readline()
             if not line:
-                return
+                return True
             try:
                 json.loads(line)
             except (ValueError, UnicodeDecodeError):
                 if line.endswith(b"\n"):
-                    raise ValueError(f"corrupt capture record in {path} at byte {offset}") from None
+                    corrupt_at = offset
+                    break
                 backup = path.with_name(f"{path.name}.damaged-{uuid4().hex}")
                 with backup.open("xb") as out:
                     out.write(line)
@@ -63,13 +80,16 @@ def recover_tail(path: Path) -> None:
                 fh.flush()
                 os.fsync(fh.fileno())
                 log.warning("incomplete append preserved in %s; recovered %s", backup, path)
-                return
+                return True
             if not line.endswith(b"\n"):
                 fh.seek(0, os.SEEK_END)
                 fh.write(b"\n")
                 fh.flush()
                 os.fsync(fh.fileno())
-                return
+                return True
+    # Closed before renaming (Windows cannot rename an open file).
+    quarantine(path, f"corrupt record at byte {corrupt_at}")
+    return False
 
 
 def hour_of(ts: datetime) -> datetime:
@@ -77,13 +97,14 @@ def hour_of(ts: datetime) -> datetime:
     return ts.astimezone(UTC).replace(minute=0, second=0, microsecond=0)
 
 
-def compress_file(path: Path) -> Path:
+def compress_file(path: Path) -> Path | None:
     """Compress hour=HH.jsonl to hour=HH.jsonl.gz atomically, then remove the plain file.
 
     Idempotent: if a crash happens after the replace but before the unlink, running it again
-    rewrites the same .gz from the same plain file.
+    rewrites the same .gz from the same plain file. Returns None if the file was quarantined.
     """
-    recover_tail(path)
+    if not recover_tail(path):
+        return None
     gz_path = path.with_suffix(".jsonl.gz")
     tmp_path = gz_path.with_name(gz_path.name + ".tmp")
     with path.open("rb") as src, gzip.open(tmp_path, "wb", compresslevel=6) as dst:
@@ -119,9 +140,10 @@ class RawCaptureWriter:
         current = self.path_for(hour_of(now))
         done = []
         for path in sorted(self.root.glob("date=*/hour=*.jsonl")):
-            recover_tail(path)
-            if path != current:
-                done.append(compress_file(path))
+            if not recover_tail(path) or path == current:
+                continue
+            if (gz := compress_file(path)) is not None:
+                done.append(gz)
         return done
 
     def last_received_at(self) -> datetime | None:
@@ -132,8 +154,8 @@ class RawCaptureWriter:
         """
         files = capture_files(self.root)
         for path in reversed(files):
-            if path.suffix == ".jsonl":
-                recover_tail(path)
+            if path.suffix == ".jsonl" and not recover_tail(path):
+                continue  # quarantined: look further back
             opener = gzip.open if path.suffix == ".gz" else open
             last = None
             with opener(path, "rt", encoding="utf-8") as fh:
@@ -157,6 +179,6 @@ class RawCaptureWriter:
             compress_file(previous)
         self._path = self.path_for(hour)
         self._path.parent.mkdir(parents=True, exist_ok=True)
-        recover_tail(self._path)
+        recover_tail(self._path)  # if quarantined, "a" starts a fresh file for this hour
         self._fh = self._path.open("a", encoding="utf-8")
         self._hour = hour

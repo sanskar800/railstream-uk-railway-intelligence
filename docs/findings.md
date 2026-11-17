@@ -255,3 +255,12 @@ no OOM or automatic restart was observed. This does not prove simultaneous
 full-stack capacity or indefinitely growing-history performance. Schedule
 snapshots and automated VM movement catch-up remain outside this implementation.
 Evidence: `results/dev/2026-11-16-corpus-refresh/`; decision: ADR-011.
+
+## F22. Review of Days 6–7: the CORPUS writer raced under parallel remote-signed I/O; capture now quarantines instead of stopping (2026-11-17)
+
+Re-running the integration suite during a review of the Day 6–7 work: bronze (2) and silver (2) passed, but the CORPUS workflow scenario passed **1 of 3** runs. Failures varied (`PermissionError: Forbidden` on a manifest write, `AccessDenied` on a scan read) and came from SeaweedFS: Lakekeeper logged every signing request as authorised and refused none. The Spark writer through the same catalog and storage never failed. With PyIceberg limited to one worker thread (`PYICEBERG_MAX_WORKERS=1`) the scenario passed **8 of 8** runs (4 with an override, 4 with the built-in setting). Diagnosis: a race in parallel remote-signed requests through fsspec/s3fs; the exact component is not isolated.
+
+- Consequence: the single reference writer (`orchestration/corpus.py`) runs single-threaded; a CORPUS load is ~11k rows once a day, so speed is irrelevant. The DAG's two retries had masked the flakiness, and one passing run on 2026-11-16 had not revealed it: flaky tests need repeated runs.
+- Also changed in the review: a capture file with interior corruption is now quarantined byte for byte (`.corrupt-<id>`) and capture continues, instead of the bridge refusing to start (which on the VM would have stopped the 24/7 archive); the Spark CORPUS loader was removed so the reference table has one writer (`make load-corpus` runs the DAG's writer in the Airflow image).
+- Evidence: scenario runs in this session (exit codes and `rows: 4`); Lakekeeper audit log 2026-11-17 12:12 UTC (authorisations only, no refusals).
+

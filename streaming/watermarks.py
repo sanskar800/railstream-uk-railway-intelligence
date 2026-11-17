@@ -6,7 +6,7 @@ so a global advance cannot throw away old backfill or corrections before MERGE.
 
 from pyspark.sql import functions as F
 
-from streaming.silver import CLASSIFIED_SCHEMA
+from streaming.schemas import CLASSIFIED_SCHEMA
 from trust.silver import classify
 
 

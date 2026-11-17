@@ -74,6 +74,10 @@ def load_corpus(manifest: dict, *, table_name="ref.locations") -> dict:
     if actual != manifest:
         raise ValueError("CORPUS changed after validation; rerun validation before loading")
 
+    # One worker thread: with remote signing through fsspec/s3fs, PyIceberg's parallel manifest
+    # reads/writes were intermittently refused by SeaweedFS (Forbidden/AccessDenied, 2 of 3 runs);
+    # single-threaded, 8 of 8 runs passed (findings F22). A CORPUS load is ~11k rows a day.
+    os.environ.setdefault("PYICEBERG_MAX_WORKERS", "1")
     import pyarrow as pa
     from pyiceberg.catalog import load_catalog
     from pyiceberg.expressions import EqualTo
@@ -124,3 +128,22 @@ def load_corpus(manifest: dict, *, table_name="ref.locations") -> dict:
     if count != len(rows):
         raise ValueError(f"Stored CORPUS version has {count} rows; expected {len(rows)}")
     return {**manifest, "table": table_name, "inserted": count}
+
+
+def main() -> None:
+    """`python -m orchestration.corpus FILE`: validate and load a CORPUS file (make load-corpus)."""
+    import argparse
+    import json
+
+    parser = argparse.ArgumentParser(description=main.__doc__)
+    # Default = the path make load-corpus mounts. Kept out of the command line because Git Bash
+    # rewrites arguments starting with "/" into Windows paths.
+    parser.add_argument("file", nargs="?", default="/reference/CORPUSExtract.json.gz")
+    parser.add_argument("--table", default="ref.locations")
+    args = parser.parse_args()
+    result = load_corpus(validate_corpus(args.file), table_name=args.table)
+    print("CORPUS_LOAD " + json.dumps(result), flush=True)
+
+
+if __name__ == "__main__":
+    main()

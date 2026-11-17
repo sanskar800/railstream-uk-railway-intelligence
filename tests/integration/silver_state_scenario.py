@@ -11,10 +11,41 @@ from confluent_kafka.admin import AdminClient, NewTopic
 from pyspark.sql import functions as F
 
 from streaming.bronze import DDL
-from streaming.locations import load_locations, reference_snapshot
+from streaming.locations import SCHEMA, reference_snapshot
 from streaming.session import build_session
 from streaming.silver import create_tables, process_classified_batch
 from streaming.watermarks import prepare_stream
+from trust.locations import read_corpus
+
+
+# Test fixture: writes synthetic reference versions with Spark. Production has one writer,
+# orchestration/corpus.py, which runs in the Airflow image (PyIceberg is not in the Spark image).
+def load_locations(spark, path: Path, table="ref.locations"):
+    from streaming.silver import identifier
+
+    identifier(table)
+    version, rows = read_corpus(path)
+    now = datetime.now(UTC)
+    data = spark.createDataFrame(
+        [dict(row, reference_version=version, loaded_at=now) for row in rows],
+        SCHEMA,
+    )
+    spark.sql(f"CREATE NAMESPACE IF NOT EXISTS {table.split('.')[0]}")
+    if not spark.catalog.tableExists(table):
+        data.writeTo(table).using("iceberg").create()
+    else:
+        spark.catalog.refreshTable(table)
+        data.createOrReplaceTempView("corpus_load")
+        spark.sql(
+            f"MERGE INTO {table} t USING corpus_load s ON "
+            "t.stanox=s.stanox AND t.reference_version=s.reference_version "
+            "WHEN NOT MATCHED THEN INSERT *"
+        )
+    spark.catalog.refreshTable(table)
+    count = spark.table(table).where(F.col("reference_version") == version).count()
+    if count != len(rows):
+        raise ValueError(f"CORPUS version has {count} rows; expected {len(rows)}")
+    return {"table": table, "reference_version": version, "locations": count}
 
 
 def main():

@@ -156,8 +156,9 @@ Times are UTC (a timestamp without an offset is read as UTC). Replaying a window
 
 ## 7. Silver processor (Day 6)
 
-After bronze exists (`make up`, then `make stream`), build the Spark image and
-run `make load-corpus` using `data/reference/CORPUSExtract.json.gz`.
+After bronze exists (`make up`, then `make stream`), load the reference data once with
+`make load-corpus` (`data/reference/CORPUSExtract.json.gz`; runs the same writer as the
+`refresh_corpus` DAG, `orchestration/corpus.py`, in the Airflow image without starting Airflow).
 Then `make silver` starts the
 revision-aware processor and `make silver-logs` shows movements/rejects/other counts.
 Its Spark UI is localhost:4041; its checkpoint is `/checkpoints/silver_trust_movement_v2`
@@ -217,12 +218,8 @@ and database password are separate. Passwords containing reserved URI characters
 are encoded before database connection. `_CMD` output must have no trailing
 newline; a regression test covers that boundary.
 
-`railstream_platform_check` is a **manual, read-only** setup DAG, with one task.
-Select it, trigger it, open the run and then its task logs to see
-`RAILSTREAM_PLATFORM_CHECK: task execution succeeded`. It proves scheduling and
-execution; it does not download CORPUS or start Spark.
-
-`refresh_corpus` is the implemented reference workflow:
+`refresh_corpus` is the reference workflow (a setup-only smoke DAG used on
+2026-11-16 was removed once this real DAG proved scheduling and execution):
 
 ```text
 download (Network Rail HTTPS) -> validate (CORPUS + STANOX rules)

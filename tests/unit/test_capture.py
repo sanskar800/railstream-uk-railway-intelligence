@@ -126,14 +126,24 @@ def test_complete_record_without_newline_is_kept_before_append(tmp_path):
     assert not list(path.parent.glob("*.damaged-*"))
 
 
-def test_interior_corruption_is_not_discarded(tmp_path):
-    path = RawCaptureWriter(tmp_path).path_for(T0)
-    path.parent.mkdir(parents=True)
+def test_interior_corruption_is_quarantined_and_capture_continues(tmp_path):
+    earlier = RawCaptureWriter(tmp_path)
+    earlier.write(T0 - timedelta(hours=1), {}, "[]")  # hour 13, healthy
+    earlier.close()
+    path = earlier.path_for(T0)  # hour 14, damaged in the middle
     data = b'broken\n{"received_at":"2026-11-05T14:59:58+00:00"}\n'
     path.write_bytes(data)
-    with pytest.raises(ValueError, match="corrupt capture record"):
-        RawCaptureWriter(tmp_path).last_received_at()
-    assert path.read_bytes() == data
+
+    restarted = RawCaptureWriter(tmp_path)
+    restarted.compress_completed(T0 + timedelta(hours=1))  # must not raise
+    [quarantined] = path.parent.glob("hour=14.jsonl.corrupt-*")
+    assert quarantined.read_bytes() == data  # kept byte for byte, nothing discarded
+    assert not path.exists()
+    assert restarted.last_received_at() == T0 - timedelta(hours=1)  # skips the quarantined hour
+
+    restarted.write(T0 - timedelta(seconds=30), {}, "[]")  # capture continues in that hour
+    restarted.close()
+    assert len(read_lines(path)) == 1
 
 
 def test_startup_ignores_incomplete_compression_files(tmp_path):

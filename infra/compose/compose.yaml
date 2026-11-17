@@ -146,6 +146,7 @@ services:
       NR_PASSWORD: ${NR_PASSWORD:-}
       CATALOG_URI: http://lakekeeper:8181/catalog
       WAREHOUSE: railstream
+      PYICEBERG_MAX_WORKERS: "1"   # parallel remote-signed S3 requests race (findings F22)
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN_CMD: python /railstream/infra/airflow/start.py --database-url
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"

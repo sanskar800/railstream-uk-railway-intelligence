@@ -15,10 +15,15 @@ checks the plain JSONL file:
 - An invalid final record without a newline is treated as an interrupted append.
   Its exact bytes are written to a unique `.damaged-<id>` file and fsynced before
   the source is truncated back to its last complete record. Recovery is logged.
-- Newline-terminated or interior corruption stops recovery. It is not skipped.
-  Inspect a copy before deciding how to repair it.
-- Only `.jsonl` and `.jsonl.gz` are capture inputs. `.tmp` and `.damaged-*` files
-  are excluded from last-frame lookup. Keep quarantined bytes for investigation.
+- Newline-terminated or interior corruption is never repaired automatically. The
+  whole file is renamed, byte for byte, to `hour=HH.jsonl.corrupt-<id>` and a
+  `CAPTURE FILE QUARANTINED` error is logged; **capture continues** (a fresh file is
+  started if it was the current hour). Stopping the bridge would lose the live feed,
+  which matters more than one damaged hour kept for inspection. Inspect a copy
+  before repairing it; until then that hour is missing to `pull-raw` and replay,
+  which refuses windows with missing hours, so the gap stays visible.
+- Only `.jsonl` and `.jsonl.gz` are capture inputs. `.tmp`, `.damaged-*` and
+  `.corrupt-*` files are excluded from last-frame lookup, compression and replay.
 
 This repairs interrupted appends; it is not a guarantee against disk loss or
 filesystem corruption. Unacknowledged frames can be redelivered only within the
