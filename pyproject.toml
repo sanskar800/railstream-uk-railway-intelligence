@@ -20,6 +20,10 @@ dependencies = [
 package = false
 
 [dependency-groups]
+# Installed only on the processing VM (uv run --group ops): Oracle SDK for publishing metrics.
+ops = [
+    "oci==2.189.0",
+]
 # Installed only in the Spark image (infra/spark/Dockerfile): pyspark bundles ~400 MB of jars, and
 # Spark needs Java, which the laptop does not have (Spark runs in Docker).
 spark = [

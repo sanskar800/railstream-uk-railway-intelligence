@@ -1,0 +1,12 @@
+[Unit]
+Description=RailStream: publish feed_age_seconds to Oracle Monitoring
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+WorkingDirectory=/home/ubuntu/railstream
+ExecStart=/home/ubuntu/.local/bin/uv run --frozen --group ops python -m ops.feed_age
+TimeoutStartSec=50
+Nice=5
