@@ -13,7 +13,9 @@ echo "== one dry run (reads Kafka, publishes nothing)"
 "$HOME/.local/bin/uv" run --frozen --group ops python -m ops.feed_age --dry-run
 echo "== systemd timer"
 chmod +x infra/cloud/autoheal.sh
-sudo cp infra/cloud/railstream-feed-age.service infra/cloud/railstream-feed-age.timer \n        infra/cloud/railstream-autoheal.service infra/cloud/railstream-autoheal.timer /etc/systemd/system/
+sudo cp infra/cloud/railstream-feed-age.service infra/cloud/railstream-feed-age.timer \
+        infra/cloud/railstream-autoheal.service infra/cloud/railstream-autoheal.timer \
+        /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now railstream-feed-age.timer railstream-autoheal.timer
 systemctl list-timers "railstream-*" --no-pager | head -4

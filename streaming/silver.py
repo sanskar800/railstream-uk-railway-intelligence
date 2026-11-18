@@ -227,7 +227,7 @@ def main():
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     spark = build_session("silver_trust_movement")
     spark.sparkContext.setLogLevel("WARN")
-    spark.streams.addListener(ProgressLogger())
+    spark.streams.addListener(ProgressLogger("silver"))
     create_tables(spark, args.namespace)
     if not spark.catalog.tableExists(args.reference_table):
         raise ValueError("load CORPUS first with make load-corpus")

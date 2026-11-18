@@ -77,14 +77,18 @@ def to_bronze(kafka: DataFrame) -> DataFrame:
 class ProgressLogger(StreamingQueryListener):
     """One log line per micro-batch: rows, rate, duration and the Kafka offsets reached."""
 
+    def __init__(self, name: str = "bronze") -> None:
+        super().__init__()
+        self.log = logging.getLogger(name)  # the job's own name in its log lines
+
     def onQueryStarted(self, event) -> None:
-        log.info("query started: id=%s run=%s", event.id, event.runId)
+        self.log.info("query started: id=%s run=%s", event.id, event.runId)
 
     def onQueryProgress(self, event) -> None:
         p = event.progress
         if p.numInputRows == 0:
             return
-        log.info(
+        self.log.info(
             "batch %d: %d rows in %.1fs (%.0f rows/s); offsets %s",
             p.batchId, p.numInputRows, p.batchDuration / 1000, p.processedRowsPerSecond or 0,
             p.sources[0].endOffset if p.sources else "?",
@@ -94,7 +98,7 @@ class ProgressLogger(StreamingQueryListener):
         pass
 
     def onQueryTerminated(self, event) -> None:
-        log.info("query terminated%s", f": {event.exception}" if event.exception else "")
+        self.log.info("query terminated%s", f": {event.exception}" if event.exception else "")
 
 
 def start(
