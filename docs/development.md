@@ -308,3 +308,10 @@ old versions survive a changed file, and changed input cannot bypass validation.
 The broader `make it` still contains destructive bronze tests; do not use it for
 this check. Generated real-run and Spark interoperability evidence is under
 `results/dev/2026-11-16-corpus-refresh/`.
+
+## 9. Iceberg maintenance and self-healing (Day 8)
+
+`iceberg_maintenance` (Airflow, daily 03:00 UTC) runs through the Spark Connect server (`spark-connect`, profile `airflow`, ADR-015), one table at a time: compact finished partitions (bronze and revisions before today, current calls older than 2 days), expire snapshots older than 3 days (keep at least 10; silver's stream position in bronze must survive), remove orphans older than 3 days (`prefix_listing => true`), and keep only the last 100 metadata files. Before/after counts go to `ops.maintenance_runs`; read them with `make sql Q="SELECT * FROM ops.maintenance_runs ORDER BY started_at"`. Rules and SQL: `orchestration/maintenance.py`; tests: `tests/unit/test_maintenance.py` and `make it` (`test_iceberg_maintenance.py`, needs the airflow profile).
+
+Self-healing on the processing VM: every long-running service has `restart: unless-stopped` (crashes, reboots), and `railstream-autoheal.timer` restarts any container Docker reports as unhealthy every 2 minutes (Docker's restart policy acts only on exits). Installed by `infra/cloud/install-monitoring.sh`; logs: `journalctl -u railstream-autoheal`.
+

@@ -290,3 +290,19 @@ The first manual run of `iceberg_maintenance` on the real tables compacted silve
 - Lessons: an always-on host needs restart policies everywhere; memory limits sized for steady streaming must be re-checked for batch jobs; freshness must be measured where data is consumed, not only where it enters.
 - Evidence: container states and restart counts, Spark Connect and silver logs, and the bronze audit, 2026-11-17 16:52–17:07 UTC.
 
+## F26. Silver scanned its whole target on every micro-batch; bounding the scans by identity fixed it (2026-11-18)
+
+Silver restarted three times on 2026-11-18 (09:43, 15:46, 18:52): twice `OutOfMemoryError: Java heap space` while materialising the current-call MERGE, once a knock-on connection error. Batches took **133–148 s** for a 60 s trigger, so silver fell behind and batches grew. Cause: to merge ~1,000 new rows, `merge_current` read the entire `silver.trust_movement` table (7.8 M rows) to find matching calls, and both MERGEs scanned their whole targets; the join on a hash key allowed no pruning. The previous night's compaction (larger files) likely raised per-task memory.
+
+- A first fix bounded the scans to the batch's times ±1 day. The silver state integration scenario failed: after a correction moved a call's actual time two days earlier, a replayed older report fell outside the window and was inserted as a second row. A time window is an assumption; identity is not.
+- Final fix (`streaming/bounds.py`): a planned call's current row has exactly the same `planned_ts` (part of its identity), and an unresolved report's match has exactly the same `actual_ts` (its whole body is its identity). The lookup and both MERGEs filter on those ranges; Iceberg's per-file min/max skips the other files. Both silver integration scenarios passed.
+- Measured on the live job after deploying: batches **~43 s** (1,256–2,678 rows), shrinking as it caught up; memory 1.9 GB of 3 GB.
+- Evidence: silver container logs 2026-11-18; integration run on the processing VM (2 passed).
+
+## F27. First nightly maintenance run: bronze and revisions files cut by three quarters (2026-11-18)
+
+The scheduled `iceberg_maintenance` run at 03:00 UTC (17 minutes, one table at a time): bronze **792 → 188 data files** (average 0.53 → 2.23 MB; 612 rewritten into 4); silver revisions **615 → 156** (1.42 → 5.54 MB); silver current calls 276 → 234 (only calls older than 2 days are compacted, as MERGE corrections touch recent days). Bronze had grown from 191 to 792 files in about ten hours, one per one-minute micro-batch. Snapshots rose rather than fell: none was older than the 3-day retention yet, and each compaction commits one.
+
+- Also built and verified the same day: a host watchdog (`railstream-autoheal.timer`) restarts containers Docker reports as unhealthy, tested with a container whose health check always fails (restarted within one run).
+- Evidence: `results/dev/2026-11-18-iceberg-maintenance/maintenance_runs.parquet` (exported from `ops.maintenance_runs`).
+
