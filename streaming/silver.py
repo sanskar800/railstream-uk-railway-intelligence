@@ -13,13 +13,12 @@ import logging
 import os
 import re
 import signal
-from dataclasses import dataclass
-from datetime import datetime, timedelta
 
 from pyspark import StorageLevel
 from pyspark.sql import functions as F
 from pyspark.sql.window import Window
 
+from streaming.bounds import BatchBounds, between, match_predicate
 from streaming.bronze import ProgressLogger
 from streaming.schemas import CLASSIFIED_SCHEMA, MOVEMENT_SCHEMA
 from streaming.session import build_session
@@ -65,37 +64,14 @@ def create_tables(spark, namespace):
     )
 
 
-# A revision of a planned call lands within a day of the call's planned time (TRUST delays of
-# more than 24 hours do not occur; such trains are cancelled). Bounding the target scan to the
-# batch's times +/- this window lets Iceberg skip every other day's files. Without it, each
-# micro-batch scanned all of silver (millions of rows): batches took ~140 s for a 60 s trigger
-# and the driver ran out of heap (findings F26).
-MATCH_WINDOW = timedelta(days=1)
-
-
-@dataclass(frozen=True)
-class BatchBounds:
-    actual_min: datetime  # exact range of actual_ts in the batch (identical revisions match it)
-    actual_max: datetime
-    lo: datetime  # actual and planned times, widened by MATCH_WINDOW (current calls)
-    hi: datetime
-
-
 def batch_bounds(movements) -> BatchBounds:
-    planned = F.coalesce("planned_ts", "actual_ts")
     row = movements.agg(
         F.min("actual_ts").alias("amin"),
         F.max("actual_ts").alias("amax"),
-        F.min(F.least("actual_ts", planned)).alias("lo"),
-        F.max(F.greatest("actual_ts", planned)).alias("hi"),
+        F.min("planned_ts").alias("pmin"),
+        F.max("planned_ts").alias("pmax"),
     ).first()
-    return BatchBounds(row["amin"], row["amax"], row["lo"] - MATCH_WINDOW, row["hi"] + MATCH_WINDOW)
-
-
-def between(column: str, lo: datetime, hi: datetime) -> str:
-    """A target-side range predicate Iceberg can use for partition and file pruning."""
-    fmt = "%Y-%m-%d %H:%M:%S.%f"
-    return f"{column} BETWEEN TIMESTAMP '{lo:{fmt}}' AND TIMESTAMP '{hi:{fmt}}'"
+    return BatchBounds(row["amin"], row["amax"], row["pmin"], row["pmax"])
 
 
 def merge_new(spark, frame, table, key, prune: str | None = None):
@@ -113,9 +89,10 @@ def merge_current(spark, movements, namespace, locations=None, bounds: BatchBoun
     table = f"{namespace}.trust_movement"
     spark.catalog.refreshTable(table)
     bounds = bounds or batch_bounds(movements)
-    window = between("actual_ts", bounds.lo, bounds.hi)
     keys = movements.select("event_key").distinct()
-    existing = spark.table(table).where(window).join(keys, "event_key", "left_semi")
+    existing = (
+        spark.table(table).where(match_predicate(bounds)).join(keys, "event_key", "left_semi")
+    )
     candidates = movements.unionByName(existing)
     newest = Window.partitionBy("event_key").orderBy(F.col("msg_queue_ts").desc())
     latest = candidates.withColumn("queue_rank", F.dense_rank().over(newest)).where("queue_rank=1")
@@ -146,7 +123,7 @@ def merge_current(spark, movements, namespace, locations=None, bounds: BatchBoun
         chosen.createOrReplaceTempView("silver_current")
         spark.sql(
             f"MERGE INTO {table} t USING silver_current s ON t.event_key=s.event_key "
-            f"AND t.{window} "
+            f"AND {match_predicate(bounds, 't.')} "
             "WHEN MATCHED AND (s.revision_id <> t.revision_id OR "
             "s.revision_conflict <> t.revision_conflict OR "
             "NOT(s.location_reference_version <=> t.location_reference_version)) "
@@ -204,7 +181,7 @@ def process_classified_batch(
                 locations = reference_snapshot(spark, reference_table)
                 movements = enrich(movements, locations)
             bounds = batch_bounds(movements)
-            # An identical revision has an identical actual time: the exact range is enough.
+            # A revision's id covers its whole body: an identical one has the same actual time.
             revisions_window = between("actual_ts", bounds.actual_min, bounds.actual_max)
             merge_new(
                 spark, movements, f"{namespace}.movement_revisions", "revision_id",
