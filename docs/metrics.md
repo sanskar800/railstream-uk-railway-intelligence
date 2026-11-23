@@ -56,9 +56,10 @@ TRUST records what happened, not why, so reactionary delay is an **inference**. 
 2. An **incident cluster** at a location starts with a delay event when no cluster is open there, and stays open while further delay events occur at that location within **30 minutes** (v1) of the previous one.
 3. The first train's gain is the **primary delay**; gains by other trains in the cluster are **reactionary delay**.
 
-- **Columns:** `location`, `cluster_start`, `cluster_end`, `primary_train_id`, `primary_delay_min`, `reactionary_trains`, `reactionary_delay_min`.
+- **Columns:** `loc_stanox`, `location_name`, `crs`, `cluster_start`, `cluster_end`, `local_date`, `local_hour` (of the cluster start), `primary_train_id`, `primary_delay_min`, `reactionary_trains`, `reactionary_delay_min`, `passenger_reactionary_delay_min`, `delay_events`.
+- Delay gained comes from the same intermediate model as the hotspots (`int_delay_changes`), so the two tables always agree.
 - **Q1 answer:** locations ranked by `reactionary_delay_min` for clusters starting 06:00–10:00 local.
-- **Limitations (stated wherever the metric is shown):** misses delay that spreads to *other* locations along the line; can merge independent problems at busy junctions; ignores train-unit and crew links between services (those need schedule associations). Validated only as a pattern check against official attribution (findings F4).
+- **Limitations (stated wherever the metric is shown):** misses delay that spreads to *other* locations along the line; can merge independent problems at busy junctions; ignores train-unit and crew links between services (those need schedule associations); a busy location with a delay event at least every 30 minutes never closes its cluster, so one "incident" can last all day (measured in findings F30). Validated only as a pattern check against official attribution (findings F4).
 
 ## 7. Cancellations (brief Q4)
 
@@ -106,3 +107,4 @@ immutable. See [silver-design.md](silver-design.md) and ADR-009 for details.
 - v1 (2026-11-05): first definitions.
 - 2026-11-16: implemented late-event bypass and reference-version provenance.
 - 2026-11-23: punctuality grain adds the destination (the accepted operator/location/hour deviation) and `sum_delay_min`/`latest_received_at`; operator classification v1 fixed in the seed; delay gained resets after a 6-hour gap. First gold build (findings F29).
+- 2026-11-23: `gold.reactionary_delay` built with heuristic v1 as defined above (findings F30). A maximum cluster length (v2) is proposed, not applied.

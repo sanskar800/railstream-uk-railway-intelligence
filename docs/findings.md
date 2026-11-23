@@ -325,3 +325,15 @@ ADR-004's spike, inside the processing VM's Docker network (DuckDB 1.5.6): readi
 - First builds: `dbt build` 9/9 passed (seed tests, two gold models, gold tests), then 5/5 on a rebuild through the atomic-swap path. `delay_hotspots` ~50 s and `punctuality_hourly` ~4 s on the 2-OCPU VM. Spark read the tables DuckDB wrote (127,363 and 976,185 rows); each rebuild added one snapshot.
 - Results for Thursday 2026-11-19 (UK local date; PPM-style, at destination): GTR 2,691 arrivals 85.5 % on time, Northern 2,635 / 80.1 %, ScotRail 2,167 / 90.5 %, London Overground 1,593 / 96.0 %. Delay was gained most at York (2,983 min), Colton Junction (1,661; a junction without a passenger code), Stevenage, Southall and Birmingham New Street. No destination arrival lacked a public-timetable time that day (`arrivals_wtt_fallback` = 0).
 - Evidence: dbt run output and `make sql` queries in this session (2026-11-23 15:19-15:30 UTC).
+
+## F30. Reactionary delay heuristic v1: results, and the long-cluster limitation measured (2026-11-23)
+
+`gold.reactionary_delay` (metrics.md §6, heuristic v1: delay events of 3+ minutes gained, clustered per location while gaps stay under 30 minutes) for Thursday 2026-11-19, UK local date:
+
+- **8,993 clusters**, **6,097 knock-on trains**, **42,015 reactionary minutes**.
+- Morning peak (clusters starting 06:00-09:59, brief Q1): York 1 cluster / 181 trains / 2,692 min; Colton Junction 1 / 39 / 708; Skelton (ACE Skelton Ouse Acres) 3 / 31 / 463; Doncaster 3 / 42 / 369; Oxenholme 2 / 1 / 213.
+- **Limitation measured:** York's single cluster ran 07:21 to 22:15. A busy station almost always has another 3-minute gain within 30 minutes, so the cluster never closes and unrelated problems are merged into one "incident". Only **39 of 8,993 clusters (0.4 %) last more than 2 hours, but they hold 25.2 % of the day's reactionary minutes**, and they decide the top of the Q1 ranking.
+- Proposal (v2, not applied; the user decides): close a cluster after a maximum length (e.g. 2 hours) and start a new one with a new primary train. The cost is that a genuinely long disruption is split into several clusters, each with its own "primary".
+- dbt tests: 30/30 pass (grain uniqueness per gold model, expression tests, relationships to the operator seed, two reconciliation tests gold vs. staging, source freshness on silver). The reconciliation tests first failed on live data: silver commits between dbt reading staging and reading gold, so counts drift by a few rows. They now allow `max(10, 0.1 %)`; they still fail on any real logic error, which differs by far more.
+- Scheduled (`build_gold` DAG, every 15 minutes, one run at a time): freshness check then `dbt build`, ~2.5 min per run; Airflow container peaked at ~2.0 GB of its 3 GB limit during a build.
+- Evidence: `make sql` queries and Airflow runs in this session (2026-11-23 15:45-16:10 UTC).

@@ -25,4 +25,4 @@ ADR-004 chose dbt on DuckDB for gold and left one question to a time-boxed spike
 - A changed column list needs `dbt build --full-refresh` for that model (`INSERT … BY NAME` fails otherwise); the brief drop-and-create is acceptable for a derived table.
 - Each build adds one snapshot per gold table; gold is covered by the 12-hour retention class when added to Iceberg maintenance.
 - Found while building: without `adapter.commit()` the materialization reported success while DuckDB rolled the table back (findings F29).
-- Full rebuilds take ~55 s on the 2-OCPU VM (delay hotspots ~50 s over all of silver); incremental models are the next step if the 15-minute schedule (Day 10) makes that too heavy.
+- Full rebuilds take ~55 s on the 2-OCPU VM (delay hotspots ~50 s over all of silver); incremental models are the next step if the 15-minute schedule makes that too heavy. Measured on Day 10 with three models and all tests: ~2.5 min per scheduled build, Airflow (with DuckDB inside) peaking at ~2.0 GB of 3 GB.
