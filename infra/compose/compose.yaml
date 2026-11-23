@@ -12,6 +12,14 @@ x-lakekeeper-env: &lakekeeper-env
   LAKEKEEPER__PG_ENCRYPTION_KEY: ${LAKEKEEPER_ENCRYPTION_KEY:-local-dev-only-not-secret}
   RUST_LOG: info
 
+# Every long-running service rotates its logs: without this, Lakekeeper's log alone reached
+# 6.3 GB on the cloud VM (findings F28).
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "3"
+
 services:
   # Kafka API + Schema Registry (ADR-001). Internal listener for containers, external for the laptop.
   redpanda:
@@ -41,6 +49,7 @@ services:
       retries: 20
     mem_limit: 1280m
     restart: unless-stopped   # always-on VM: survive crashes and reboots
+    logging: *default-logging
 
   # S3-compatible object storage for Iceberg files (replaces MinIO: architecture.md §6).
   seaweedfs:
@@ -61,6 +70,7 @@ services:
       retries: 30
     mem_limit: 1536m          # 512m was OOM-killed while compaction rewrote large files (F25)
     restart: unless-stopped
+    logging: *default-logging
 
   # Shared Postgres: Lakekeeper's catalog database now; Airflow's metadata database later.
   postgres:
@@ -82,6 +92,7 @@ services:
       retries: 20
     mem_limit: 256m
     restart: unless-stopped
+    logging: *default-logging
 
   # Iceberg REST catalog (ADR-003): schema migration first, then the server.
   lakekeeper-migrate:
@@ -107,6 +118,7 @@ services:
       retries: 20
     mem_limit: 256m
     restart: unless-stopped
+    logging: *default-logging
 
   # One-shot, idempotent: bucket, catalog bootstrap, warehouse. Reuses the SeaweedFS image (sh, wget, weed).
   # In the `init` profile so `up --wait` ignores it; `make up` runs it explicitly after the services are healthy.
@@ -138,6 +150,7 @@ services:
       redpanda: {condition: service_healthy}
     mem_limit: 256m
     restart: unless-stopped
+    logging: *default-logging
 
   # Local development: one parent supervises API, scheduler, parser and triggerer.
   # LocalExecutor needs no Redis/Celery services. Metadata is isolated from Lakekeeper.
@@ -191,6 +204,7 @@ services:
     mem_limit: 1536m
     stop_grace_period: 60s
     restart: unless-stopped
+    logging: *default-logging
 
   # Kafka -> Iceberg bronze (task 5.2). Spark in local mode inside one container (ADR-007).
   spark-bronze:
@@ -215,6 +229,7 @@ services:
       lakekeeper: {condition: service_healthy}
     mem_limit: 1536m            # 1 GB driver heap + JVM overhead + Python
     restart: unless-stopped
+    logging: *default-logging
 
   # Spark Connect server for Airflow's batch jobs (Iceberg maintenance, ADR-015): Airflow sends SQL
   # over gRPC with pyspark-client, so it needs no Java and no Docker socket. Network-internal only.
@@ -241,6 +256,7 @@ services:
       start_period: 30s
     mem_limit: 1536m
     restart: unless-stopped
+    logging: *default-logging
 
   # Bronze -> typed/current movements, revision history and DLQ (Day 6).
   spark-silver:
@@ -265,6 +281,7 @@ services:
       lakekeeper: {condition: service_healthy}
     mem_limit: 3072m            # 1.5 GB heap + JVM overhead + Python UDF workers (cloud VM: 12 GB)
     restart: unless-stopped
+    logging: *default-logging
 
 volumes:
   airflow-home:

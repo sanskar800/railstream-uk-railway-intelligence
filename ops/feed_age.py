@@ -1,4 +1,4 @@
-"""Publish `feed_age_seconds`: time since the newest record reached raw.trust.movement.
+"""Publish `feed_age_seconds` (newest record in raw.trust.movement) and `disk_used_percent`.
 
 Runs every minute on the processing VM (systemd timer `railstream-feed-age`). One number watches
 the whole ingestion path: it grows if the capture VM, the bridge, the private network, Kafka
@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import sys
 import urllib.request
 from datetime import UTC, datetime
@@ -23,6 +24,8 @@ from datetime import UTC, datetime
 TOPIC = "raw.trust.movement"
 NAMESPACE = "railstream"
 METRIC = "feed_age_seconds"
+DISK_METRIC = "disk_used_percent"
+HOST = "railstream-core"
 METADATA = "http://169.254.169.254/opc/v2/instance/"
 
 
@@ -50,18 +53,25 @@ def feed_age_seconds(latest: datetime | None, now: datetime) -> float | None:
     return None if latest is None else max(0.0, (now - latest).total_seconds())
 
 
-def metric_payload(age: float, compartment_id: str, now: datetime) -> dict:
-    """The PostMetricData body (as plain data, so it is testable without the SDK)."""
+def metric_payload(
+    name: str, value: float, dimensions: dict, compartment_id: str, now: datetime
+) -> dict:
+    """One PostMetricData entry (plain data, so it is testable without the SDK)."""
     return {
         "namespace": NAMESPACE,
         "compartment_id": compartment_id,
-        "name": METRIC,
-        "dimensions": {"topic": TOPIC},
-        "datapoints": [{"timestamp": now, "value": round(age, 1)}],
+        "name": name,
+        "dimensions": dimensions,
+        "datapoints": [{"timestamp": now, "value": round(value, 1)}],
     }
 
 
-def publish(payload: dict, region: str) -> None:
+def disk_used_percent(path: str = "/") -> float:
+    usage = shutil.disk_usage(path)
+    return 100.0 * usage.used / usage.total
+
+
+def publish(payloads: list[dict], region: str) -> None:
     import oci  # ops dependency group: installed on the processing VM only
 
     signer = oci.auth.signers.InstancePrincipalsSecurityTokenSigner()
@@ -70,9 +80,13 @@ def publish(payload: dict, region: str) -> None:
         signer=signer,
         service_endpoint=f"https://telemetry-ingestion.{region}.oraclecloud.com",
     )
-    datapoints = [oci.monitoring.models.Datapoint(**d) for d in payload["datapoints"]]
-    details = oci.monitoring.models.MetricDataDetails(**{**payload, "datapoints": datapoints})
-    client.post_metric_data(oci.monitoring.models.PostMetricDataDetails(metric_data=[details]))
+    details = [
+        oci.monitoring.models.MetricDataDetails(
+            **{**p, "datapoints": [oci.monitoring.models.Datapoint(**d) for d in p["datapoints"]]}
+        )
+        for p in payloads
+    ]
+    client.post_metric_data(oci.monitoring.models.PostMetricDataDetails(metric_data=details))
 
 
 def instance_metadata() -> dict:
@@ -88,25 +102,37 @@ def main() -> None:
 
     from confluent_kafka import Consumer
 
-    bootstrap = os.environ.get("KAFKA_BOOTSTRAP", "127.0.0.1:19092")
+    now = datetime.now(UTC)
+    # Disk first and independently: a full disk is what breaks Kafka (findings F28), so this
+    # number must still arrive when the feed age cannot be measured.
+    disk = disk_used_percent("/")
+    measurements = [(DISK_METRIC, disk, {"host": HOST, "mount": "/"})]
+    print(f"{DISK_METRIC}={disk:.1f}", flush=True)
+    failure = None
     consumer = Consumer(
         {
-            "bootstrap.servers": bootstrap,
+            "bootstrap.servers": os.environ.get("KAFKA_BOOTSTRAP", "127.0.0.1:19092"),
             "group.id": "railstream-feed-age",
             "enable.auto.commit": False,
         }  # fmt: skip
     )
     try:
-        now = datetime.now(UTC)
         age = feed_age_seconds(latest_record_time(consumer), now)
+        if age is None:
+            failure = f"{TOPIC} is empty"
+        else:
+            measurements.append((METRIC, age, {"topic": TOPIC}))
+            print(f"{METRIC}={age:.1f}", flush=True)
+    except Exception as exc:  # Kafka down: publish no feed age, so the absence alarm fires
+        failure = f"cannot read {TOPIC}: {exc}"
     finally:
         consumer.close()
-    if age is None:
-        sys.exit(f"{TOPIC} is empty; nothing to publish")
-    print(f"{METRIC}={age:.1f}", flush=True)
     if not args.dry_run:
         meta = instance_metadata()
-        publish(metric_payload(age, meta["compartmentId"], now), meta["canonicalRegionName"])
+        payloads = [metric_payload(n, v, d, meta["compartmentId"], now) for n, v, d in measurements]
+        publish(payloads, meta["canonicalRegionName"])
+    if failure:
+        sys.exit(failure)
 
 
 if __name__ == "__main__":

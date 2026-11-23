@@ -31,10 +31,22 @@ def test_tiny_tables_are_not_compacted(table):
     assert compaction_sql(policy_for(table), NOW) is None
 
 
-def test_snapshots_kept_three_days_and_at_least_ten():
+def test_bronze_snapshots_kept_three_days_and_at_least_ten():
     sql = expire_sql(policy_for("bronze.trust_movement"), NOW)
     assert "older_than => TIMESTAMP '2026-11-15 03:00:00'" in sql  # silver's position survives
     assert "retain_last => 10" in sql
+
+
+@pytest.mark.parametrize("table", ["silver.trust_movement", "silver.movement_revisions"])
+def test_silver_keeps_only_twelve_hours_of_old_versions(table):
+    # Nothing streams from silver; three days of its versions filled the disk (F28).
+    assert "older_than => TIMESTAMP '2026-11-17 15:00:00'" in expire_sql(policy_for(table), NOW)
+
+
+def test_compaction_folds_in_merge_on_read_delete_files():
+    assert "'delete-file-threshold', '1'" in compaction_sql(
+        policy_for("silver.trust_movement"), NOW
+    )
 
 
 def test_orphans_use_prefix_listing_and_a_three_day_window():

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import glob
 import os
+import shutil
 
 from pyspark.sql import SparkSession
 
@@ -43,7 +44,22 @@ def master() -> str:
     return os.environ.get("SPARK_MASTER", "local[2]")  # 2 cores: the VM's whole CPU
 
 
+def remove_stale_local_dirs(root: str = "/tmp") -> int:
+    """Delete Spark scratch directories left by a previous run of this container.
+
+    Spark removes them on a clean exit, not after a crash. `restart: unless-stopped` restarts the
+    same container, so crash-looping silver piled them up inside its writable layer (~11 GB,
+    findings F28). One Spark application per container, so at startup none of them is in use.
+    """
+    removed = 0
+    for path in glob.glob(f"{root}/spark-*") + glob.glob(f"{root}/blockmgr-*"):
+        shutil.rmtree(path, ignore_errors=True)
+        removed += 1
+    return removed
+
+
 def build_session(app_name: str) -> SparkSession:
+    remove_stale_local_dirs()
     builder = SparkSession.builder.appName(app_name).master(master())
     for key, value in spark_conf().items():
         builder = builder.config(key, value)

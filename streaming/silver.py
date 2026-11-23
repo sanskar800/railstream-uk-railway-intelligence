@@ -36,6 +36,14 @@ def identifier(value):
 
 # Every commit writes a metadata file and snapshot expiry does not remove them, so keep only the
 # last 100 (as bronze does). Without this, silver accumulated ~1,440 metadata files a day (Day 8).
+# Merge-on-read for the current-call table: a MERGE that corrects a few rows writes small
+# delete files instead of rewriting every data file it touches. Copy-on-write rewrote today's
+# partition file every minute (~40 GB/day), and three days of those versions filled the disk
+# (findings F28). Nightly compaction folds the delete files back in.
+MERGE_ON_READ = (
+    "'write.merge.mode'='merge-on-read', 'write.update.mode'='merge-on-read', "
+    "'write.delete.mode'='merge-on-read'"
+)
 TABLE_PROPERTIES = (
     "'format-version'='2', 'write.metadata.delete-after-commit.enabled'='true', "
     "'write.metadata.previous-versions-max'='100'"
@@ -58,6 +66,8 @@ def create_tables(spark, namespace):
                     f"ALTER TABLE {namespace}.{name} ADD COLUMN "
                     f"{field.name} {field.dataType.simpleString()}"
                 )
+    # Existing tables get the setting too (CREATE ... IF NOT EXISTS leaves their properties alone).
+    spark.sql(f"ALTER TABLE {namespace}.trust_movement SET TBLPROPERTIES ({MERGE_ON_READ})")
     spark.sql(
         f"CREATE TABLE IF NOT EXISTS {namespace}.rejected_messages "
         f"(record_id STRING, value STRING) USING iceberg TBLPROPERTIES ({TABLE_PROPERTIES})"

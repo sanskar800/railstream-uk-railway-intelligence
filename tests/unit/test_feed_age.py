@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from ops.feed_age import feed_age_seconds, latest_record_time, metric_payload
+from ops.feed_age import disk_used_percent, feed_age_seconds, latest_record_time, metric_payload
 
 NOW = datetime(2026, 11, 17, 15, 0, tzinfo=UTC)
 
@@ -59,8 +59,14 @@ def test_feed_age(latest, age):
 
 
 def test_metric_payload_targets_the_railstream_namespace():
-    payload = metric_payload(12.34, "ocid1.tenancy.example", NOW)
+    payload = metric_payload("feed_age_seconds", 12.34, {"topic": "raw.trust.movement"},
+                             "ocid1.tenancy.example", NOW)  # fmt: skip
     assert payload["namespace"] == "railstream"  # the only namespace the policy allows
     assert payload["name"] == "feed_age_seconds"
     assert payload["dimensions"] == {"topic": "raw.trust.movement"}
     assert payload["datapoints"] == [{"timestamp": NOW, "value": 12.3}]
+
+
+def test_disk_used_percent_is_a_percentage(tmp_path):
+    value = disk_used_percent(str(tmp_path))
+    assert 0.0 < value < 100.0

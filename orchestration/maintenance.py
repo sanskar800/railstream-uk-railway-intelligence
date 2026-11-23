@@ -6,8 +6,9 @@ is built by pure functions (unit-tested without Spark); `maintain_table` execute
 Safety rules, each from a real constraint:
 - Compact only partitions that writers have finished with: bronze and revisions before today,
   current calls older than 2 days (silver's MERGE corrections touch recent days).
-- Keep snapshots for 3 days (and at least the last 10). Silver streams from bronze and its
+- Keep bronze snapshots for 3 days (and at least the last 10). Silver streams from bronze and its
   checkpoint records the bronze snapshot it has reached; expiring that snapshot would break it.
+  Silver keeps 12 hours: nothing streams from it, and its old versions filled the disk (F28).
 - Orphans older than 3 days only (Iceberg refuses under 24 h: an in-flight write looks orphaned),
   listed with prefix_listing, which goes through Iceberg's remote-signed S3 client; the default
   Hadoop listing needs an S3 connector the image deliberately omits (ADR-007).
@@ -23,7 +24,6 @@ from datetime import UTC, datetime, timedelta
 
 CATALOG = "lake"
 RUNS_TABLE = "ops.maintenance_runs"
-SNAPSHOT_RETENTION = timedelta(days=3)
 ORPHAN_AGE = timedelta(days=3)
 RETAIN_LAST = 10
 TARGET_FILE_BYTES = 128 * 1024 * 1024
@@ -38,10 +38,15 @@ class TablePolicy:
     table: str
     partition_column: str | None  # the column the table's day partitions derive from
     compact_before_days: int | None  # None = no compaction (tiny tables)
+    # How long old snapshots (and the files only they reference) are kept. Only bronze needs
+    # days: silver streams from it and its checkpoint records the bronze snapshot it reached.
+    # Nothing streams from silver, so its old versions are only storage; keeping three days
+    # of them filled the 145 GB disk on 2026-11-22 (findings F28).
+    snapshot_retention: timedelta = timedelta(hours=12)
 
 
 POLICIES = [
-    TablePolicy("bronze.trust_movement", "kafka_ts", 0),
+    TablePolicy("bronze.trust_movement", "kafka_ts", 0, timedelta(days=3)),
     TablePolicy("silver.movement_revisions", "actual_ts", 0),
     TablePolicy("silver.trust_movement", "actual_ts", 2),
     TablePolicy("silver.rejected_messages", None, None),
@@ -65,6 +70,9 @@ def compaction_sql(policy: TablePolicy, now: datetime) -> str | None:
         "target-file-size-bytes": str(TARGET_FILE_BYTES),
         "partial-progress.enabled": "true",  # commit groups as they finish: less conflict risk
         "partial-progress.max-commits": "10",
+        # Merge-on-read tables accumulate delete files; rewrite any data file that has one,
+        # so reads stop applying deletes at query time (findings F28).
+        "delete-file-threshold": "1",
     }
     opts = ", ".join(f"'{k}', '{v}'" for k, v in options.items())
     return (
@@ -76,7 +84,7 @@ def compaction_sql(policy: TablePolicy, now: datetime) -> str | None:
 def expire_sql(policy: TablePolicy, now: datetime) -> str:
     return (
         f"CALL {CATALOG}.system.expire_snapshots(table => '{policy.table}', "
-        f"older_than => {literal(now - SNAPSHOT_RETENTION)}, retain_last => {RETAIN_LAST})"
+        f"older_than => {literal(now - policy.snapshot_retention)}, retain_last => {RETAIN_LAST})"
     )
 
 

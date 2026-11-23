@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pyspark
 
-from streaming.session import master, spark_conf
+from streaming.session import master, remove_stale_local_dirs, spark_conf
 
 SERVER_CLASS = "org.apache.spark.sql.connect.service.SparkConnectServer"
 
@@ -29,6 +29,7 @@ def command() -> list[str]:
 
 
 def main() -> None:
+    remove_stale_local_dirs()
     args = command()
     os.execv(args[0], args)  # replace this process: signals reach the JVM directly
 
