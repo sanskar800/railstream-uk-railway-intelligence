@@ -19,6 +19,7 @@ gold = bag.dags["build_gold"]
 assert list(gold.task_ids) == ["silver_freshness", "dbt_build"], gold.task_ids
 assert gold.get_task("silver_freshness").downstream_task_ids == {"dbt_build"}
 assert gold.max_active_runs == 1 and not gold.catchup
+assert not any(t.do_xcom_push for t in gold.tasks)
 assert list(dag.task_ids) == order, dag.task_ids
 for upstream, downstream in zip(order, order[1:], strict=False):
     assert dag.get_task(upstream).downstream_task_ids == {downstream}

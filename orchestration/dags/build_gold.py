@@ -22,10 +22,15 @@ DBT = "mkdir -p /opt/airflow/dbt && /opt/dbt/bin/dbt"
 def build_gold():
     # Fails (error_after: 2 h) if silver has stalled, so gold is never rebuilt on stale data
     # without anyone noticing; warns after 30 min (transform/models/staging/sources.yml).
-    freshness = BashOperator(task_id="silver_freshness", bash_command=f"{DBT} source freshness")
+    # do_xcom_push=False: nothing reads the output, and storing it is one more API call that can
+    # time out when the VM is busy (a successful build was once marked failed that way, F31).
+    freshness = BashOperator(
+        task_id="silver_freshness", bash_command=f"{DBT} source freshness", do_xcom_push=False
+    )
     build = BashOperator(
         task_id="dbt_build",
         bash_command=f"{DBT} build",
+        do_xcom_push=False,
         execution_timeout=timedelta(minutes=12),
     )
     freshness >> build
