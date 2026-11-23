@@ -25,7 +25,7 @@ Punctuality uses passenger trains only (as official measures do). Hotspots inclu
 |---|---|
 | `delay_wtt_min` | `timetable_variation` with sign: `LATE` → +n, `EARLY` → −n, `ON TIME` → 0. Against the **working timetable** (`planned_timestamp`), which includes passing points |
 | `delay_gbtt_min` | `actual_ts − gbtt_ts` in whole minutes, only where `gbtt_timestamp` is present (passenger stops). Against the **public timetable** passengers see |
-| `delay_gained_min` | For consecutive reports of the same `train_id` ordered by `actual_ts`: `max(0, delay_wtt_min − previous delay_wtt_min)`, attributed to the later report's location. The first report of a train gains nothing |
+| `delay_gained_min` | For consecutive reports of the same `train_id` ordered by `actual_ts`: `max(0, delay_wtt_min − previous delay_wtt_min)`, attributed to the later report's location. The first report of a train gains nothing, and neither does a report more than 6 hours after the previous one (the `train_id` was reused: its last two characters are the day of month) |
 | `delay_recovered_min` | The negative part of the same difference (time made up) |
 
 **Why two timetables:** punctuality is about what passengers were promised (public timetable). Where delay is *created* is an operational question, and passing points (junctions) only exist in the working timetable.
@@ -35,8 +35,9 @@ Punctuality uses passenger trains only (as official measures do). Hotspots inclu
 - **Unit:** one passenger train arriving at its destination: a movement with `planned_event_type = 'DESTINATION'` and `event_type = 'ARRIVAL'`.
 - **On time (PPM-style):** `delay_gbtt_min ≤ 5` for regional and London & South East operators, `≤ 10` for long-distance operators. The operator's group is in `ref.operators.service_group` (v1 classification by operator; operators running both kinds of service are treated as regional, a documented simplification).
 - **If `gbtt_timestamp` is missing at the destination:** use `delay_wtt_min` and count how often this happens (`arrivals_wtt_fallback`).
-- **Grain:** local date × local hour of arrival × operator.
-- **Columns:** `arrivals`, `on_time_arrivals`, `on_time_pct`, `avg_delay_min`, `p90_delay_min`, `arrivals_wtt_fallback`.
+- **Grain:** local date × local hour of arrival × operator × destination (`destination_stanox`, name, CRS).
+- **Columns:** `arrivals`, `on_time_arrivals`, `on_time_pct`, `avg_delay_min`, `sum_delay_min` (so readers can re-aggregate the average over hours, operators or destinations), `p90_delay_min`, `arrivals_wtt_fallback`, `latest_received_at`.
+- **Operators:** `ref.operators` is the dbt seed `operators` (from the Open Rail Data wiki's TOC Codes page; one row per sector code, the active company where the page lists two). Long-distance (10 min): Avanti West Coast, LNER, CrossCountry, TransPennine Express, Lumo (both codes), Hull Trains, Grand Central (both codes), Caledonian Sleeper, Eurostar. GWR and EMR run both kinds of service and count as regional.
 
 **Known difference from official PPM:** PPM counts cancelled and part-cancelled trains as failures. v1 reports punctuality over arrivals and cancellations separately (§7), because matching a cancellation to the hour its train would have arrived needs the schedule. Labelled "PPM-style", never "PPM".
 
@@ -104,3 +105,4 @@ immutable. See [silver-design.md](silver-design.md) and ADR-009 for details.
 
 - v1 (2026-11-05): first definitions.
 - 2026-11-16: implemented late-event bypass and reference-version provenance.
+- 2026-11-23: punctuality grain adds the destination (the accepted operator/location/hour deviation) and `sum_delay_min`/`latest_received_at`; operator classification v1 fixed in the seed; delay gained resets after a 6-hour gap. First gold build (findings F29).

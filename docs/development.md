@@ -315,3 +315,11 @@ this check. Generated real-run and Spark interoperability evidence is under
 
 Self-healing on the processing VM: every long-running service has `restart: unless-stopped` (crashes, reboots), and `railstream-autoheal.timer` restarts any container Docker reports as unhealthy every 2 minutes (Docker's restart policy acts only on exits). Installed by `infra/cloud/install-monitoring.sh`; logs: `journalctl -u railstream-autoheal`.
 
+## 10. dbt gold (Day 9)
+
+The dbt project is `transform/` (ADR-017). dbt runs in the Airflow image's own environment against the stack, inside the Docker network:
+
+- `make dbt ARGS="seed"` loads the operator reference (`transform/seeds/operators.csv`, from the Open Rail Data wiki, CC BY-SA).
+- `make dbt ARGS="build"` builds and tests everything in dependency order; `make dbt ARGS="build --select delay_hotspots"` builds one model; add `--full-refresh` after changing a model's columns.
+- Results are Iceberg tables `lake.gold.punctuality_hourly` and `lake.gold.delay_hotspots`, readable by any engine: `make sql Q="SELECT * FROM gold.punctuality_hourly LIMIT 10"`.
+- DuckDB reads and writes storage with the scoped `dbt` SeaweedFS identity (`DBT_S3_ACCESS_KEY`/`DBT_S3_SECRET_KEY` in `.env`; local defaults in Compose), because it cannot use Lakekeeper's remote signing. dbt state (seed, compiled SQL, logs) lives on the Airflow volume under `/opt/airflow/dbt`.

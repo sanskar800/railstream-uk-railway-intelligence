@@ -26,3 +26,7 @@ Use **dbt-duckdb**. Gold is written **to Iceberg through the REST catalog if a t
 ## Update 2026-11-17
 
 dbt and the API will run on the processing VM inside the Docker network (ADR-012), so the open question of laptop clients resolving the `seaweedfs` storage endpoint no longer applies; the Day 9 spike still decides whether gold is written to Iceberg. Memory reasoning now uses the 12 GB VM.
+
+## Update 2026-11-23
+
+The spike was run: gold **is** written to Iceberg, with DuckDB holding a scoped storage key (it cannot use remote signing) and a custom transactional materialization instead of dbt's rename-based `table` (ADR-017). The fallback (gold outside Iceberg) was not needed.

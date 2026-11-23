@@ -22,6 +22,7 @@ An ADR records **one** significant decision: the context, the options considered
 | [014](014-ingestion-freshness-alarm.md) | `feed_age_seconds` measured on the processing VM every minute; Oracle alarms on staleness and absence email `railstream-alerts` | Accepted (2026-11-17) |
 | [015](015-spark-connect-for-batch-jobs.md) | Airflow drives Spark batch jobs (Iceberg maintenance) through a Spark Connect server: no Java and no Docker socket in Airflow | Accepted (2026-11-17) |
 | [016](016-merge-on-read-for-silver-current-calls.md) | Merge-on-read for silver's current-call table; snapshot retention per table (bronze 3 days, silver 12 hours) | Accepted (2026-11-23) |
+| [017](017-dbt-duckdb-gold-in-iceberg.md) | Gold in Iceberg via dbt-duckdb: a scoped storage key for DuckDB (no remote signing) and a transactional `iceberg_table` materialization | Accepted (2026-11-23) |
 
 Smaller decisions and accepted deviations from the spec are listed in [architecture.md §6](../architecture.md#6-deviations-from-the-original-specification); what the build revealed is in [findings.md](../findings.md).
 

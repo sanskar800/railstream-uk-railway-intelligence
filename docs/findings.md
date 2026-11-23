@@ -317,3 +317,11 @@ Found on return after five days: the 145 GB disk was 100 % full. SeaweedFS held 
 - **Detection gap:** the freshness alarms (ADR-014) should have fired once Kafka stopped accepting messages; whether the emails arrived is to be confirmed. A disk metric would have warned days earlier.
 - Evidence: commands and outputs in this session (2026-11-23 14:10–14:55 UTC); capture bridge and Redpanda logs.
 
+## F29. Gold in Iceberg works through DuckDB with a scoped key; first punctuality and hotspot results (2026-11-23)
+
+ADR-004's spike, inside the processing VM's Docker network (DuckDB 1.5.6): reading through Lakekeeper's remote signing failed with **403**; with its own S3 key DuckDB read `silver.trust_movement` (**11,641,378 rows, 14 s**) with **0 duplicate event keys**, so silver's merge-on-read delete files are applied correctly; creating, inserting into and dropping an Iceberg table worked. dbt's standard `table` materialization failed ("can't be renamed"), and `CREATE OR REPLACE` is not implemented for DuckDB-Iceberg; a delete-and-insert transaction worked (ADR-017).
+
+- A first version of the custom materialization reported "OK created" while the table did not exist: dbt opens a transaction and its own materializations call `adapter.commit()`; without it DuckDB rolled the work back at close. Found because the gold tests failed with "table does not exist", also in a fresh process.
+- First builds: `dbt build` 9/9 passed (seed tests, two gold models, gold tests), then 5/5 on a rebuild through the atomic-swap path. `delay_hotspots` ~50 s and `punctuality_hourly` ~4 s on the 2-OCPU VM. Spark read the tables DuckDB wrote (127,363 and 976,185 rows); each rebuild added one snapshot.
+- Results for Thursday 2026-11-19 (UK local date; PPM-style, at destination): GTR 2,691 arrivals 85.5 % on time, Northern 2,635 / 80.1 %, ScotRail 2,167 / 90.5 %, London Overground 1,593 / 96.0 %. Delay was gained most at York (2,983 min), Colton Junction (1,661; a junction without a passenger code), Stevenage, Southall and Birmingham New Street. No destination arrival lacked a public-timetable time that day (`arrivals_wtt_fallback` = 0).
+- Evidence: dbt run output and `make sql` queries in this session (2026-11-23 15:19-15:30 UTC).
