@@ -1,0 +1,15 @@
+version: 2
+
+models:
+  - name: punctuality_hourly
+    description: "PPM-style punctuality at destination (docs/metrics.md §4)."
+    columns:
+      - name: arrivals
+        data_tests: [not_null]
+      - name: on_time_pct
+        data_tests: [not_null]
+  - name: delay_hotspots
+    description: "Delay gained per location and hour (docs/metrics.md §5)."
+    columns:
+      - name: delay_gained_min
+        data_tests: [not_null]

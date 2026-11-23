@@ -1,0 +1,31 @@
+# Runs inside the Airflow image (its own Python environment, /opt/dbt), inside the Docker network.
+# DuckDB cannot use Lakekeeper's remote signing, so it reads and writes storage with its own,
+# narrowly scoped SeaweedFS identity (bucket `warehouse` only); keys come from .env (ADR-017).
+railstream:
+  target: prod
+  outputs:
+    prod:
+      type: duckdb
+      path: "{{ env_var('DBT_DUCKDB_PATH', '/tmp/railstream.duckdb') }}"  # seeds live here
+      threads: 1                    # one writer: Iceberg commits are serialised anyway
+      extensions: [iceberg, httpfs, icu]
+      settings:
+        memory_limit: "{{ env_var('DBT_DUCKDB_MEMORY', '1500MB') }}"
+        threads: 2
+        TimeZone: UTC
+      secrets:
+        - type: s3
+          key_id: "{{ env_var('DBT_S3_ACCESS_KEY') }}"
+          secret: "{{ env_var('DBT_S3_SECRET_KEY') }}"
+          endpoint: seaweedfs:8333
+          url_style: path
+          use_ssl: false
+          region: us-east-1
+      attach:
+        - path: railstream
+          alias: lake
+          type: iceberg
+          options:
+            endpoint: "{{ env_var('CATALOG_URI', 'http://lakekeeper:8181/catalog') }}"
+            authorization_type: none
+            access_delegation_mode: none

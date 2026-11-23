@@ -1,0 +1,82 @@
+sector_code,operator_name,business_code,atoc_code,is_passenger,service_group
+02,JSD Rail Research & Development,RR,ZZ,false,
+03,Victa Westlink Rail (defunct),PV,ZZ,false,
+04,DB Cargo Charters,FM,ZZ,false,
+05,DB Cargo Freight,WA,ZZ,false,
+06,Eurostar,GA,ES,true,long_distance
+07,Rail Operations Group,PH,ZZ,false,
+08,DB Cargo International,FD,ZZ,false,
+09,Heavy Haul Rail,FL,ZZ,false,
+10,Serco Rail Operations,FX,ZZ,false,
+11,Freightliner Heavy Haul,DH,ZZ,false,
+12,Lumo West Coast,LF,LF,true,long_distance
+13,Europorte Channel,PT,ZZ,false,
+14,Grand Central (North West),LN,GC,true,long_distance
+15,Network Rail (On-Track Machines),LR,LR,false,
+16,LORAM,LC,ZZ,false,
+17,Hanson & Hall Rail Services,YG,ZZ,false,
+18,Swanage Railway,SP,SP,true,regional
+19,South Yorkshire Supertram,SJ,SJ,true,regional
+20,TransPennine Express,EA,TP,true,long_distance
+21,Greater Anglia,EB,LE,true,regional
+22,Grand Central,EC,GC,true,long_distance
+23,Northern Trains,ED,NT,true,regional
+24,Heathrow Connect,EE,HC,true,regional
+25,Great Western Railway,EF,GW,true,regional
+26,Unmapped (was First Capital Connect),EG,FC,false,
+27,CrossCountry,EH,XC,true,long_distance
+28,East Midlands Railway,EM,EM,true,regional
+29,West Midlands Trains,EJ,LM,true,regional
+30,London Overground (First Rail London),EK,LO,true,regional
+31,Network Rail Virtual Freight Company,QJ,ZZ,false,
+32,Unmapped (was Wrexham and Shropshire),EI,WS,false,
+33,Elizabeth line (GTS),EX,XR,true,regional
+34,DC Rail,PO,ZZ,false,
+35,Caledonian Sleeper,ES,CS,true,long_distance
+36,Vintage Trains,TY,TY,true,regional
+37,Seco Rail (defunct),RU,ZZ,false,
+38,Carillion Rail CTRL (Phase 1) (defunct),RQ,ZZ,false,
+39,Harsco,RT,ZZ,false,
+40,Balfour Beatty Rail,RZ,ZZ,false,
+41,Unmapped (was Europhoenix),PX,PX,false,
+42,Colas Rail,RG,ZZ,false,
+43,Amey Fleet Services,RE,ZZ,false,
+44,Carillion Rail,RB,ZZ,false,
+45,Lumo,LD,LD,true,long_distance
+46,SB (Swietelsky Babcock) Rail,RD,ZZ,false,
+49,VolkerRail,RH,ZZ,false,
+50,West Coast Railways,PA,WR,true,regional
+51,North Yorkshire Moors Railway,PR,NY,true,regional
+52,Pre Metro Operations,PK,ZZ,false,
+53,SNCF Freight Services,PS,ZZ,false,
+54,GB Railfreight,PE,ZZ,false,
+55,Hull Trains,PF,HT,true,long_distance
+56,Nexus (Tyne & Wear Metro),PG,TW,true,regional
+57,Go-Op,GO,,false,
+59,On Route Logistics,PM,ZZ,false,
+60,ScotRail,HA,SR,true,regional
+61,London North Eastern Railway,HB,GR,true,long_distance
+62,Fishbone Solutions,,FS,false,
+64,Merseyrail,HE,ME,true,regional
+65,Avanti West Coast,HF,VT,true,long_distance
+66,Freightliner Intermodal,,,false,
+71,Transport for Wales,HL,AW,true,regional
+72,Legge Infrastructure Services,LG,ZZ,false,
+74,Chiltern Railways,HO,CH,true,regional
+79,c2c,HT,CC,true,regional
+80,Southeastern,HU,SE,true,regional
+81,Unmapped (was Gatwick Express),HV,GX,false,
+82,Unmapped (was Southern),HW,SN,false,
+84,South Western Railway,HY,SW,true,regional
+85,Island Lines,HZ,IL,true,regional
+86,Heathrow Express,HM,HX,true,regional
+88,Govia Thameslink Railway (Thameslink/Great Northern/Southern),ET,GN/TL/SN,true,regional
+89,Locomotive Services,LS,LS,false,
+90,LUL District Line - Wimbledon,XB,LT,true,regional
+91,LUL Bakerloo Line,XC,LT,true,regional
+92,Network Rail Reserved Pathings (non-QJ),NR,ZZ,false,
+93,LUL District Line - Richmond,XE,LT,true,regional
+94,Ffestiniog Railway,XJ,,false,
+95,Varamis Rail,MV,,false,
+97,Direct Rail Services,XH,ZZ,false,
+98,Internal Testing,RM,ZZ,false,

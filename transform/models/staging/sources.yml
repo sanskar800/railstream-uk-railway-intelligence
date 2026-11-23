@@ -1,0 +1,10 @@
+version: 2
+
+sources:
+  - name: silver
+    description: Written by the Spark silver job (streaming/silver.py); one Iceberg catalog.
+    database: lake
+    schema: silver
+    tables:
+      - name: trust_movement
+        description: One row per planned call (latest revision wins, ADR-008).

@@ -58,6 +58,8 @@ services:
     environment:
       S3_ACCESS_KEY: ${S3_ACCESS_KEY:-railstream}
       S3_SECRET_KEY: ${S3_SECRET_KEY:-railstream-local-secret}
+      DBT_S3_ACCESS_KEY: ${DBT_S3_ACCESS_KEY:-railstream-dbt}
+      DBT_S3_SECRET_KEY: ${DBT_S3_SECRET_KEY:-railstream-dbt-local-secret}
     ports:
       - 127.0.0.1:8333:8333     # S3 API
     volumes:
@@ -169,6 +171,14 @@ services:
       CATALOG_URI: http://lakekeeper:8181/catalog
       WAREHOUSE: railstream
       PYICEBERG_MAX_WORKERS: "1"   # parallel remote-signed S3 requests race (findings F22)
+      # dbt (Day 9, ADR-017): its own environment in the image; scoped storage key; state on the volume.
+      DBT_S3_ACCESS_KEY: ${DBT_S3_ACCESS_KEY:-railstream-dbt}
+      DBT_S3_SECRET_KEY: ${DBT_S3_SECRET_KEY:-railstream-dbt-local-secret}
+      DBT_PROJECT_DIR: /opt/railstream/transform
+      DBT_PROFILES_DIR: /opt/railstream/transform
+      DBT_TARGET_PATH: /opt/airflow/dbt/target
+      DBT_LOG_PATH: /opt/airflow/dbt/logs
+      DBT_DUCKDB_PATH: /opt/airflow/dbt/railstream.duckdb
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN_CMD: python /railstream/infra/airflow/start.py --database-url
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
@@ -190,6 +200,7 @@ services:
       - airflow-home:/opt/airflow
       - ../airflow:/railstream/infra/airflow:ro
       - ../../orchestration/dags:/opt/airflow/dags:ro
+      - ../../transform:/opt/railstream/transform:ro
     depends_on:
       postgres: {condition: service_healthy}
       lakekeeper: {condition: service_healthy}

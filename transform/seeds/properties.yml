@@ -1,0 +1,19 @@
+version: 2
+
+seeds:
+  - name: operators
+    description: >
+      TRUST sector code (toc_id) to operator, derived from the Open Rail Data wiki "TOC Codes"
+      page (edited 2026-10-05; CC BY-SA). One row per sector code: where the page lists two
+      companies for a code, the active one is kept (88 = GTR incl. Southern). is_passenger:
+      ATOC code present and not ZZ, except Network Rail on-track machines (LR) and Locomotive
+      Services (LS). service_group: long_distance gets the 10-minute punctuality threshold;
+      operators running both kinds of service count as regional (docs/metrics.md §4).
+    columns:
+      - name: sector_code
+        data_tests: [unique, not_null]
+      - name: service_group
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [long_distance, regional]

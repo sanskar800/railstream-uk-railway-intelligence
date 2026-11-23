@@ -1,6 +1,8 @@
 #!/bin/sh
 # Start SeaweedFS in single-container mode (master + volume + filer + S3 gateway).
-# The S3 identity is written from environment variables so no credentials live in the repo.
+# S3 identities are written from environment variables so no credentials live in the repo:
+# `railstream` (Lakekeeper, which signs requests for every other client) and `dbt` (DuckDB cannot
+# use remote signing, so it gets its own key, limited to the warehouse bucket; ADR-017).
 set -eu
 
 cat > /tmp/s3.json <<EOF
@@ -10,6 +12,11 @@ cat > /tmp/s3.json <<EOF
       "name": "railstream",
       "credentials": [{"accessKey": "${S3_ACCESS_KEY}", "secretKey": "${S3_SECRET_KEY}"}],
       "actions": ["Admin", "Read", "Write", "List", "Tagging"]
+    },
+    {
+      "name": "dbt",
+      "credentials": [{"accessKey": "${DBT_S3_ACCESS_KEY}", "secretKey": "${DBT_S3_SECRET_KEY}"}],
+      "actions": ["Read:warehouse", "Write:warehouse", "List:warehouse"]
     }
   ]
 }

@@ -1,0 +1,28 @@
+# RailStream gold layer: dbt on DuckDB reading silver from Iceberg and writing gold back to
+# Iceberg through the Lakekeeper catalog (ADR-004, ADR-017). Definitions: docs/metrics.md.
+name: railstream
+version: "1.0.0"
+profile: railstream
+model-paths: ["models"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+
+models:
+  railstream:
+    staging:
+      +materialized: ephemeral      # inlined into the gold queries; no stored copy of silver
+    gold:
+      +materialized: iceberg_table  # macros/iceberg_table.sql: atomic content swap in Iceberg
+      +database: lake
+      +schema: gold
+
+seeds:
+  railstream:
+    operators:
+      +column_types:
+        sector_code: varchar
+        operator_name: varchar
+        business_code: varchar
+        atoc_code: varchar
+        is_passenger: boolean
+        service_group: varchar

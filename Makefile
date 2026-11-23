@@ -4,7 +4,7 @@
 # .env is optional for the local stack: every variable it can set has a local default.
 COMPOSE = docker compose $(if $(wildcard .env),--env-file .env,) -f infra/compose/compose.yaml
 
-.PHONY: help setup test it tunnel sql lint format replay topics schemas stream stream-logs silver silver-logs load-corpus airflow airflow-logs pull-raw up down ps logs tools stats
+.PHONY: help setup test it tunnel sql dbt lint format replay topics schemas stream stream-logs silver silver-logs load-corpus airflow airflow-logs pull-raw up down ps logs tools stats
 
 help:  ## List targets
 	@uv run python -c "import re; [print(f\"{m[0]:<12} {m[1]}\") for m in re.findall(r\"^([a-z-]+):.*## (.*)$$\", open(\"Makefile\").read(), re.M)]"
@@ -71,6 +71,12 @@ load-corpus:  ## Load data/reference/CORPUSExtract.json.gz with the DAG's writer
 
 silver-logs:  ## Follow silver batch counts (movements / rejects / other TRUST types)
 	$(COMPOSE) --profile stream logs -f spark-silver
+
+# dbt runs in the Airflow image's own environment (/opt/dbt), inside the Docker network (ADR-017).
+# ARGS reaches the container as an environment variable, so shells do not re-parse it.
+export ARGS
+dbt:  ## Run dbt on the stack: make dbt ARGS="build" (or "seed", "run -s delay_hotspots", ...)
+	$(COMPOSE) --profile airflow run --rm --no-deps -e ARGS airflow bash -c 'mkdir -p /opt/airflow/dbt && /opt/dbt/bin/dbt $$ARGS'
 
 airflow:  ## Start the local Airflow scheduler and UI on http://localhost:8086
 	$(COMPOSE) up -d --wait postgres lakekeeper seaweedfs
