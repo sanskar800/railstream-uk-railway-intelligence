@@ -4,7 +4,7 @@
 # .env is optional for the local stack: every variable it can set has a local default.
 COMPOSE = docker compose $(if $(wildcard .env),--env-file .env,) -f infra/compose/compose.yaml
 
-.PHONY: help setup test it tunnel sql dbt lint format replay topics schemas stream stream-logs silver silver-logs load-corpus airflow airflow-logs pull-raw up down ps logs tools stats
+.PHONY: help setup test it tunnel sql dbt dbt-docs lint format replay topics schemas stream stream-logs silver silver-logs load-corpus airflow airflow-logs pull-raw up down ps logs tools stats
 
 help:  ## List targets
 	@uv run python -c "import re; [print(f\"{m[0]:<12} {m[1]}\") for m in re.findall(r\"^([a-z-]+):.*## (.*)$$\", open(\"Makefile\").read(), re.M)]"
@@ -77,6 +77,9 @@ silver-logs:  ## Follow silver batch counts (movements / rejects / other TRUST t
 export ARGS
 dbt:  ## Run dbt on the stack: make dbt ARGS="build" (or "seed", "run -s delay_hotspots", ...)
 	$(COMPOSE) --profile airflow run --rm --no-deps -e ARGS airflow bash -c 'mkdir -p /opt/airflow/dbt && /opt/dbt/bin/dbt $$ARGS'
+
+dbt-docs:  ## Generate the dbt docs site on the cloud VM and save it to data/dbt-docs/index.html
+	uv run python scripts/dbt_docs.py
 
 airflow:  ## Start the local Airflow scheduler and UI on http://localhost:8086
 	$(COMPOSE) up -d --wait postgres lakekeeper seaweedfs
