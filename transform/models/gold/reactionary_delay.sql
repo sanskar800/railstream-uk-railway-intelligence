@@ -1,13 +1,17 @@
--- gold.reactionary_delay: incident clusters per location (docs/metrics.md §6, heuristic v1).
+-- gold.reactionary_delay: incident clusters per location (docs/metrics.md §6, heuristic v2).
 -- An INFERENCE, not official attribution: TRUST records where time was lost, never why.
 --   1. a delay event is a report gaining >= 3 minutes;
 --   2. a cluster at a location starts with a delay event and stays open while further delay
 --      events occur there within 30 minutes of the previous one;
+--   2b. (v2) a cluster lasts at most 2 hours: it is split into 2-hour windows counted from its
+--      first event, each window a cluster with its own primary train (a busy station otherwise
+--      never closes its cluster; findings F30);
 --   3. the first train's gain is the primary delay; other trains' gains are reactionary.
 -- Limitations (shown wherever the metric is): misses knock-on delay at OTHER locations, can
 -- merge independent problems at busy junctions, ignores unit and crew links between services.
 {% set min_gain_min = 3 %}
 {% set gap_minutes = 30 %}
+{% set max_cluster_minutes = 120 %}
 
 with events as (
     select
@@ -45,10 +49,21 @@ numbered as (
     from marked
 ),
 
+windowed as (
+    select
+        *,
+        floor(
+            epoch(actual_ts - min(actual_ts) over (partition by loc_stanox, cluster_seq))
+            / ({{ max_cluster_minutes }} * 60)
+        ) as window_seq
+    from numbered
+),
+
 clusters as (
     select
         loc_stanox,
         cluster_seq,
+        window_seq,
         any_value(location_name) as location_name,
         any_value(crs) as crs,
         min(actual_ts) as cluster_start,
@@ -57,8 +72,8 @@ clusters as (
         arg_min(train_id, actual_ts) as primary_train_id,
         arg_min(gain_min, actual_ts) as primary_delay_min,
         count(*) as delay_events
-    from numbered
-    group by loc_stanox, cluster_seq
+    from windowed
+    group by loc_stanox, cluster_seq, window_seq
 )
 
 select
@@ -78,5 +93,6 @@ select
         as passenger_reactionary_delay_min,
     c.delay_events
 from clusters as c
-join numbered as n on n.loc_stanox = c.loc_stanox and n.cluster_seq = c.cluster_seq
+join windowed as n
+    on n.loc_stanox = c.loc_stanox and n.cluster_seq = c.cluster_seq and n.window_seq = c.window_seq
 group by all

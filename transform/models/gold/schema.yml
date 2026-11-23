@@ -54,7 +54,7 @@ models:
 
   - name: reactionary_delay
     description: >
-      Incident clusters per location (docs/metrics.md §6, heuristic v1): an INFERENCE, not
+      Incident clusters per location (docs/metrics.md §6, heuristic v2, at most 2 hours long): an INFERENCE, not
       official attribution. Misses knock-on delay at other locations, can merge independent
       problems at busy junctions, ignores unit and crew links between services.
     data_tests:
@@ -64,6 +64,8 @@ models:
           arguments: {expression: "primary_delay_min >= 3"}
       - expression_is_true:
           arguments: {expression: "cluster_end >= cluster_start"}
+      - expression_is_true:
+          arguments: {expression: "cluster_end - cluster_start < interval 120 minutes"}
       - expression_is_true:
           arguments: {expression: "reactionary_trains >= 0 and reactionary_delay_min >= 0"}
     columns:
