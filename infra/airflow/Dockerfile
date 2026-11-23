@@ -20,7 +20,7 @@ RUN python -m venv /opt/dbt \
     && /opt/dbt/bin/pip install --no-cache-dir dbt-core==1.12.7 dbt-duckdb==1.11.1 duckdb==1.5.6 \
     && chown -R airflow:root /opt/dbt
 USER airflow
-RUN /opt/dbt/bin/python -c "import duckdb; c = duckdb.connect(); c.sql('INSTALL iceberg; INSTALL httpfs; INSTALL icu')" \
+RUN /opt/dbt/bin/python -c "import duckdb; c = duckdb.connect(); c.sql('INSTALL iceberg; INSTALL httpfs; INSTALL icu')"
 
 ENV PYTHONPATH=/opt/railstream
 COPY --chown=airflow:root trust /opt/railstream/trust
