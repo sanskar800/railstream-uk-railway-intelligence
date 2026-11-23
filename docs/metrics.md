@@ -60,7 +60,7 @@ TRUST records what happened, not why, so reactionary delay is an **inference**. 
 - **Columns:** `loc_stanox`, `location_name`, `crs`, `cluster_start`, `cluster_end`, `local_date`, `local_hour` (of the cluster start), `primary_train_id`, `primary_delay_min`, `reactionary_trains`, `reactionary_delay_min`, `passenger_reactionary_delay_min`, `delay_events`.
 - Delay gained comes from the same intermediate model as the hotspots (`int_delay_changes`), so the two tables always agree.
 - **Q1 answer:** locations ranked by `reactionary_delay_min` for clusters starting 06:00–10:00 local.
-- **Limitations (stated wherever the metric is shown):** misses delay that spreads to *other* locations along the line; can merge independent problems at busy junctions; ignores train-unit and crew links between services (those need schedule associations); the 2-hour cap splits a genuinely long disruption into several clusters, each with its own "primary" train (v1 without the cap merged a whole day at York into one incident, findings F30). Validated only as a pattern check against official attribution (findings F4).
+- **Limitations (stated wherever the metric is shown):** misses delay that spreads to *other* locations along the line; can merge independent problems at busy junctions; ignores train-unit and crew links between services (those need schedule associations); the 2-hour cap splits a genuinely long disruption into several clusters, each with its own "primary" train (v1 without the cap merged a whole day at York into one incident, findings F30). Validated only as a pattern check against official attribution (findings F4): it finds about an eighth of the officially attributed reactionary share (8.8 % vs 66.5 %, findings F31), so treat it as a lower bound.
 
 ## 7. Cancellations (brief Q4)
 
@@ -110,3 +110,4 @@ immutable. See [silver-design.md](silver-design.md) and ADR-009 for details.
 - 2026-11-23: punctuality grain adds the destination (the accepted operator/location/hour deviation) and `sum_delay_min`/`latest_received_at`; operator classification v1 fixed in the seed; delay gained resets after a 6-hour gap. First gold build (findings F29).
 - 2026-11-23: `gold.reactionary_delay` built with heuristic v1 as defined above (findings F30). A maximum cluster length (v2) is proposed, not applied.
 - 2026-11-23: heuristic v2 accepted and applied: clusters capped at 2 hours (findings F30).
+- 2026-11-23: pattern check against official attribution P05 (findings F31). Known gap: origin late starts (25.7 % of official delay minutes) count as zero gained; a fix is proposed, not applied.
