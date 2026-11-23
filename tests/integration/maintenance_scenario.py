@@ -13,7 +13,12 @@ assert not bag.import_errors, bag.import_errors
 dag = bag.dags["iceberg_maintenance"]
 order = ["maintain_bronze_trust_movement", "maintain_silver_movement_revisions",
          "maintain_silver_trust_movement", "maintain_silver_rejected_messages",
-         "maintain_ref_locations"]  # fmt: skip
+         "maintain_ref_locations", "maintain_gold_punctuality_hourly",
+         "maintain_gold_delay_hotspots", "maintain_gold_reactionary_delay"]  # fmt: skip
+gold = bag.dags["build_gold"]
+assert list(gold.task_ids) == ["silver_freshness", "dbt_build"], gold.task_ids
+assert gold.get_task("silver_freshness").downstream_task_ids == {"dbt_build"}
+assert gold.max_active_runs == 1 and not gold.catchup
 assert list(dag.task_ids) == order, dag.task_ids
 for upstream, downstream in zip(order, order[1:], strict=False):
     assert dag.get_task(upstream).downstream_task_ids == {downstream}

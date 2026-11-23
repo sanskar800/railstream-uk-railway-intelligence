@@ -51,6 +51,11 @@ POLICIES = [
     TablePolicy("silver.trust_movement", "actual_ts", 2),
     TablePolicy("silver.rejected_messages", None, None),
     TablePolicy("ref.locations", None, None),
+    # Gold is rewritten whole by every dbt build (one snapshot each, 96 a day): no compaction,
+    # 12 hours of history (ADR-017).
+    TablePolicy("gold.punctuality_hourly", None, None),
+    TablePolicy("gold.delay_hotspots", None, None),
+    TablePolicy("gold.reactionary_delay", None, None),
 ]
 
 

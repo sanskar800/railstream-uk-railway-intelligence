@@ -179,6 +179,7 @@ services:
       DBT_TARGET_PATH: /opt/airflow/dbt/target
       DBT_LOG_PATH: /opt/airflow/dbt/logs
       DBT_DUCKDB_PATH: /opt/airflow/dbt/railstream.duckdb
+      DBT_DUCKDB_MEMORY: 1200MB
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN_CMD: python /railstream/infra/airflow/start.py --database-url
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
@@ -212,7 +213,7 @@ services:
       timeout: 10s
       retries: 20
       start_period: 60s
-    mem_limit: 1536m
+    mem_limit: 3072m          # Airflow ~1 GB + dbt's DuckDB (capped at 1.2 GB) during gold builds
     stop_grace_period: 60s
     restart: unless-stopped
     logging: *default-logging

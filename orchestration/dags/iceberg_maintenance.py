@@ -15,6 +15,9 @@ TABLES = [
     "silver.trust_movement",
     "silver.rejected_messages",
     "ref.locations",
+    "gold.punctuality_hourly",
+    "gold.delay_hotspots",
+    "gold.reactionary_delay",
 ]
 
 

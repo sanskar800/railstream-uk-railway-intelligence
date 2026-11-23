@@ -68,6 +68,9 @@ def test_every_written_table_has_a_policy():
         "silver.movement_revisions",
         "silver.rejected_messages",
         "ref.locations",
+        "gold.punctuality_hourly",
+        "gold.delay_hotspots",
+        "gold.reactionary_delay",
     }
 
 
