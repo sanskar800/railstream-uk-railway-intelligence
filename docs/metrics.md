@@ -51,15 +51,16 @@ Punctuality uses passenger trains only (as official measures do). Hotspots inclu
 
 TRUST records what happened, not why, so reactionary delay is an **inference**. Official attribution is done by people using the Delay Attribution Guide; this heuristic approximates one part of it: trains queuing behind a problem at the same place.
 
-**Heuristic v1 (same-location clustering):**
+**Heuristic v2 (same-location clustering, capped):**
 1. A **delay event** is a report with `delay_gained_min ≥ 3` (v1).
 2. An **incident cluster** at a location starts with a delay event when no cluster is open there, and stays open while further delay events occur at that location within **30 minutes** (v1) of the previous one.
+2b. **(v2)** A cluster lasts at most **2 hours**: it is split into 2-hour windows counted from its first event, and each window is a cluster with its own primary train. (v1 had no cap; a busy station then never closed its cluster, findings F30.)
 3. The first train's gain is the **primary delay**; gains by other trains in the cluster are **reactionary delay**.
 
 - **Columns:** `loc_stanox`, `location_name`, `crs`, `cluster_start`, `cluster_end`, `local_date`, `local_hour` (of the cluster start), `primary_train_id`, `primary_delay_min`, `reactionary_trains`, `reactionary_delay_min`, `passenger_reactionary_delay_min`, `delay_events`.
 - Delay gained comes from the same intermediate model as the hotspots (`int_delay_changes`), so the two tables always agree.
 - **Q1 answer:** locations ranked by `reactionary_delay_min` for clusters starting 06:00–10:00 local.
-- **Limitations (stated wherever the metric is shown):** misses delay that spreads to *other* locations along the line; can merge independent problems at busy junctions; ignores train-unit and crew links between services (those need schedule associations); a busy location with a delay event at least every 30 minutes never closes its cluster, so one "incident" can last all day (measured in findings F30). Validated only as a pattern check against official attribution (findings F4).
+- **Limitations (stated wherever the metric is shown):** misses delay that spreads to *other* locations along the line; can merge independent problems at busy junctions; ignores train-unit and crew links between services (those need schedule associations); the 2-hour cap splits a genuinely long disruption into several clusters, each with its own "primary" train (v1 without the cap merged a whole day at York into one incident, findings F30). Validated only as a pattern check against official attribution (findings F4).
 
 ## 7. Cancellations (brief Q4)
 
@@ -108,3 +109,4 @@ immutable. See [silver-design.md](silver-design.md) and ADR-009 for details.
 - 2026-11-16: implemented late-event bypass and reference-version provenance.
 - 2026-11-23: punctuality grain adds the destination (the accepted operator/location/hour deviation) and `sum_delay_min`/`latest_received_at`; operator classification v1 fixed in the seed; delay gained resets after a 6-hour gap. First gold build (findings F29).
 - 2026-11-23: `gold.reactionary_delay` built with heuristic v1 as defined above (findings F30). A maximum cluster length (v2) is proposed, not applied.
+- 2026-11-23: heuristic v2 accepted and applied: clusters capped at 2 hours (findings F30).
