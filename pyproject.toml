@@ -29,6 +29,10 @@ ops = [
 spark = [
     "pyspark==4.1.4",
 ]
+# Laptop-only analysis (make attribution-check); same DuckDB version as dbt in the Airflow image.
+analysis = [
+    "duckdb==1.5.6",
+]
 dev = [
     "pytest>=9.2.0",
     "ruff>=0.17.3",

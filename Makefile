@@ -4,7 +4,7 @@
 # .env is optional for the local stack: every variable it can set has a local default.
 COMPOSE = docker compose $(if $(wildcard .env),--env-file .env,) -f infra/compose/compose.yaml
 
-.PHONY: help setup test it tunnel sql dbt dbt-docs lint format replay topics schemas stream stream-logs silver silver-logs load-corpus airflow airflow-logs pull-raw up down ps logs tools stats
+.PHONY: attribution-check help setup test it tunnel sql dbt dbt-docs lint format replay topics schemas stream stream-logs silver silver-logs load-corpus airflow airflow-logs pull-raw up down ps logs tools stats
 
 help:  ## List targets
 	@uv run python -c "import re; [print(f\"{m[0]:<12} {m[1]}\") for m in re.findall(r\"^([a-z-]+):.*## (.*)$$\", open(\"Makefile\").read(), re.M)]"
@@ -29,6 +29,9 @@ tunnel:  ## Open the cloud UIs on localhost: Console 8085, Spark 4040/4041, Airf
 export Q
 sql:  ## Query the cloud tables: make sql Q="SELECT count(*) FROM silver.trust_movement"
 	uv run python scripts/cloud_sql.py
+
+attribution-check:  ## Pattern check of gold vs official delay attribution (file in data/reference/)
+	uv run --group analysis python scripts/attribution_check.py
 
 pull-raw:  ## Copy completed hour files from the capture VM (CAPTURE_HOST in .env)
 	uv run python scripts/pull_raw.py
