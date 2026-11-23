@@ -8,3 +8,12 @@ sources:
     tables:
       - name: trust_movement
         description: One row per planned call (latest revision wins, ADR-008).
+        loaded_at_field: received_at
+        config:
+          freshness:  # watch the data where gold consumes it, not only Kafka (findings F25)
+            warn_after: {count: 30, period: minute}
+            error_after: {count: 2, period: hour}
+        columns:
+          - name: event_key
+            description: Identity of a planned call; silver's core promise is one row each.
+            data_tests: [unique, not_null]

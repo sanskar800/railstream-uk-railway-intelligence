@@ -2,14 +2,73 @@ version: 2
 
 models:
   - name: punctuality_hourly
-    description: "PPM-style punctuality at destination (docs/metrics.md §4)."
+    description: >
+      PPM-style punctuality of passenger trains at their destination (docs/metrics.md §4), by UK
+      local date, local hour, operator and destination. "PPM-style", never "PPM": cancellations
+      are reported separately.
+    data_tests:
+      - unique_combination:
+          arguments: {columns: [local_date, local_hour, toc_id, destination_stanox]}
+      - expression_is_true:
+          arguments: {expression: "on_time_arrivals <= arrivals"}
+      - expression_is_true:
+          arguments: {expression: "on_time_pct between 0 and 100"}
+      - expression_is_true:
+          arguments: {expression: "arrivals_wtt_fallback <= arrivals"}
     columns:
+      - name: local_date
+        data_tests: [not_null]
+      - name: local_hour
+        data_tests: [not_null]
+      - name: toc_id
+        description: TRUST sector code; every one must be a known operator.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments: {to: "ref('operators')", field: sector_code}
+      - name: destination_stanox
+        data_tests: [not_null]
       - name: arrivals
+        description: Destination arrivals of passenger trains in the hour.
         data_tests: [not_null]
       - name: on_time_pct
-        data_tests: [not_null]
+        description: Share within 5 minutes (10 for long-distance operators) of the public timetable.
+
   - name: delay_hotspots
-    description: "Delay gained per location and hour (docs/metrics.md §5)."
+    description: >
+      Where delay is created (docs/metrics.md §5): minutes gained between a train's consecutive
+      reports, by UK local date, local hour and location. All trains, plus a passenger column.
+    data_tests:
+      - unique_combination:
+          arguments: {columns: [local_date, local_hour, loc_stanox]}
+      - expression_is_true:
+          arguments: {expression: "delay_gained_min >= 0 and delay_recovered_min >= 0"}
+      - expression_is_true:
+          arguments: {expression: "rank_in_hour >= 1"}
     columns:
       - name: delay_gained_min
+        description: Sum over reports at this location of max(0, delay - previous delay).
         data_tests: [not_null]
+      - name: rank_in_hour
+        description: 1 = the location where most delay was gained in that hour.
+
+  - name: reactionary_delay
+    description: >
+      Incident clusters per location (docs/metrics.md §6, heuristic v1): an INFERENCE, not
+      official attribution. Misses knock-on delay at other locations, can merge independent
+      problems at busy junctions, ignores unit and crew links between services.
+    data_tests:
+      - unique_combination:
+          arguments: {columns: [loc_stanox, cluster_start]}
+      - expression_is_true:
+          arguments: {expression: "primary_delay_min >= 3"}
+      - expression_is_true:
+          arguments: {expression: "cluster_end >= cluster_start"}
+      - expression_is_true:
+          arguments: {expression: "reactionary_trains >= 0 and reactionary_delay_min >= 0"}
+    columns:
+      - name: primary_train_id
+        description: The first train to gain at least 3 minutes when the cluster opened.
+        data_tests: [not_null]
+      - name: reactionary_delay_min
+        description: Minutes gained by other trains at the same location while the cluster was open.

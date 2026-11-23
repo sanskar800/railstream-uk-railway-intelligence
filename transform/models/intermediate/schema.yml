@@ -1,0 +1,7 @@
+version: 2
+
+models:
+  - name: int_delay_changes
+    description: "Delay gained/recovered per report vs the train's previous report (metrics.md §3)."
+    config:
+      materialized: ephemeral
