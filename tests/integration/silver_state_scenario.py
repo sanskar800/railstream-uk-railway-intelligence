@@ -9,6 +9,7 @@ from pathlib import Path
 
 from confluent_kafka.admin import AdminClient, NewTopic
 from pyspark.sql import functions as F
+from scenario_cleanup import remove_scenario
 
 from streaming.bronze import DDL
 from streaming.locations import SCHEMA, reference_snapshot
@@ -212,11 +213,12 @@ def main():
                     "reference_load_idempotent",
                     "reference_refresh_on_replay",
                 ],
-                "cleanup": "isolated tables/topic/checkpoint retained; no deletes or kills",
+                "cleanup": "isolated tables, topic and checkpoint removed after the pass",
             }
         ),
         flush=True,
     )
+    remove_scenario(spark, ns, topic, checkpoint)
     spark.stop()
 
 

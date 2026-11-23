@@ -1,4 +1,4 @@
-"""Run in the Spark image: isolated retained tables/topic; no drops or kills."""
+"""Run in the Spark image on isolated tables/topic; removed after a pass (scenario_cleanup)."""
 
 import copy
 import json
@@ -9,6 +9,7 @@ from unittest.mock import patch
 
 from confluent_kafka import Consumer, TopicPartition
 from confluent_kafka.admin import AdminClient, NewTopic
+from scenario_cleanup import remove_scenario
 
 from streaming.bronze import DDL
 from streaming.session import build_session
@@ -149,11 +150,12 @@ def main():
                     "newer_revision_clears_conflict",
                     "reject_failure_retry",
                 ],
-                "cleanup": "isolated tables, checkpoint and topic retained; no deletes or kills",
+                "cleanup": "isolated tables, checkpoint and topic removed after the pass",
             }
         ),
         flush=True,
     )
+    remove_scenario(spark, namespace, topic, checkpoint)
     spark.stop()
 
 
