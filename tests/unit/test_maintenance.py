@@ -31,6 +31,16 @@ def test_tiny_tables_are_not_compacted(table):
     assert compaction_sql(policy_for(table), NOW) is None
 
 
+@pytest.mark.parametrize(
+    "table", ["gold.punctuality_hourly", "gold.delay_hotspots", "gold.reactionary_delay"]
+)
+def test_gold_is_compacted_whole_with_its_delete_files(table):
+    # Each build replaces recent rows (ADR-018); no partitions, so no where clause.
+    sql = compaction_sql(policy_for(table), NOW)
+    assert f"table => '{table}'" in sql and "where =>" not in sql
+    assert "'delete-file-threshold', '1'" in sql
+
+
 def test_bronze_snapshots_kept_three_days_and_at_least_ten():
     sql = expire_sql(policy_for("bronze.trust_movement"), NOW)
     assert "older_than => TIMESTAMP '2026-11-15 03:00:00'" in sql  # silver's position survives

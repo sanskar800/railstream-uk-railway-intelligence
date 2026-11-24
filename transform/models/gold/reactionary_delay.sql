@@ -7,6 +7,8 @@
 --      first event, each window a cluster with its own primary train (a busy station otherwise
 --      never closes its cluster; findings F30);
 --   3. the first train's gain is the primary delay; other trains' gains are reactionary.
+-- Clusters are computed over the window plus the day before it, and only those starting
+-- inside the window are kept, so a cluster crossing midnight is never cut in two (ADR-018).
 -- Limitations (shown wherever the metric is): misses knock-on delay at OTHER locations, can
 -- merge independent problems at busy junctions, ignores unit and crew links between services.
 {% set min_gain_min = 3 %}
@@ -96,3 +98,4 @@ from clusters as c
 join windowed as n
     on n.loc_stanox = c.loc_stanox and n.cluster_seq = c.cluster_seq and n.window_seq = c.window_seq
 group by all
+having {{ in_rebuild_window('cast(c.cluster_start_local as date)') }}

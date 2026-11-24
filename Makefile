@@ -4,7 +4,7 @@
 # .env is optional for the local stack: every variable it can set has a local default.
 COMPOSE = docker compose $(if $(wildcard .env),--env-file .env,) -f infra/compose/compose.yaml
 
-.PHONY: attribution-check help setup test it tunnel sql dbt dbt-docs lint format replay topics schemas stream stream-logs silver silver-logs load-corpus airflow airflow-logs pull-raw up down ps logs tools stats
+.PHONY: attribution-check gold-backfill help setup test it tunnel sql dbt dbt-docs lint format replay topics schemas stream stream-logs silver silver-logs load-corpus airflow airflow-logs pull-raw up down ps logs tools stats
 
 help:  ## List targets
 	@uv run python -c "import re; [print(f\"{m[0]:<12} {m[1]}\") for m in re.findall(r\"^([a-z-]+):.*## (.*)$$\", open(\"Makefile\").read(), re.M)]"
@@ -80,6 +80,17 @@ silver-logs:  ## Follow silver batch counts (movements / rejects / other TRUST t
 export ARGS
 dbt:  ## Run dbt on the stack: make dbt ARGS="build" (or "seed", "run -s delay_hotspots", ...)
 	$(COMPOSE) --profile airflow run --rm --no-deps -e ARGS airflow bash -c 'mkdir -p /opt/airflow/dbt && /opt/dbt/bin/dbt $$ARGS'
+
+# Rebuild gold for past dates, 7 days per dbt run so memory stays bounded (ADR-018). The vars
+# are JSON without spaces: ARGS is word-split inside the container.
+gold-backfill:  ## Rebuild gold history in 7-day chunks (on the VM): make gold-backfill FROM=2026-11-05
+	@test -n "$(FROM)" || { echo "usage: make gold-backfill FROM=YYYY-MM-DD"; exit 1; }
+	@d=$(FROM); end=$$(date -u -d tomorrow +%F); \
+	while [ "$$d" \< "$$end" ]; do \
+	  n=$$(date -u -d "$$d + 7 days" +%F); echo "== gold $$d .. $$n"; \
+	  $(MAKE) --no-print-directory dbt ARGS='run --vars {"rebuild_from":"'$$d'","rebuild_to":"'$$n'"}' || exit 1; \
+	  d=$$n; \
+	done
 
 dbt-docs:  ## Generate the dbt docs site on the cloud VM and save it to data/dbt-docs/index.html
 	uv run python scripts/dbt_docs.py

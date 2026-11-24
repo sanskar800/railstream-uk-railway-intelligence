@@ -14,6 +14,7 @@ with per_location as (
         sum(greatest(-delay_change, 0)) as delay_recovered_min,
         max(received_at) as latest_received_at
     from {{ ref('int_delay_changes') }}
+    where {{ in_rebuild_window('cast(actual_local as date)') }}
     group by local_date, local_hour, loc_stanox
 )
 

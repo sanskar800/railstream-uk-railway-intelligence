@@ -1,5 +1,6 @@
 """Rebuild the gold layer every 15 minutes: check silver's freshness, then dbt build (3 models,
-all tests). dbt runs in the image's own environment, inside this container (ADR-017)."""
+all tests) over the rolling window of the last 3 UK dates (ADR-018). dbt runs in the
+image's own environment, inside this container (ADR-017)."""
 
 from datetime import UTC, datetime, timedelta
 
@@ -11,7 +12,9 @@ DBT = "mkdir -p /opt/airflow/dbt && /opt/dbt/bin/dbt"
 
 @dag(
     dag_id="build_gold",
-    schedule="*/15 * * * *",
+    # Not during 03:00-03:59 UTC: nightly maintenance compacts gold then, and a concurrent
+    # commit would make one of them fail and retry (ADR-018).
+    schedule="*/15 0-2,4-23 * * *",
     start_date=datetime(2026, 11, 23, tzinfo=UTC),
     catchup=False,
     max_active_runs=1,  # never two builds writing gold at once

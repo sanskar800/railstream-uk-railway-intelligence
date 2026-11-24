@@ -16,6 +16,7 @@ with arrivals as (
       and m.event_type = 'ARRIVAL'
       and m.headcode_class in ('1', '2', '9')   -- §2: passenger headcode classes ...
       and o.is_passenger                         -- ... and a passenger operator (both needed)
+      and {{ silver_window('m.actual_ts') }}     -- prune silver to the rebuild window
 )
 select
     cast(actual_local as date) as local_date,
@@ -35,4 +36,5 @@ select
     count(*) filter (where wtt_fallback) as arrivals_wtt_fallback,
     max(received_at) as latest_received_at               -- freshness (§8)
 from arrivals
+where {{ in_rebuild_window('cast(actual_local as date)') }}
 group by local_date, local_hour, toc_id, loc_stanox

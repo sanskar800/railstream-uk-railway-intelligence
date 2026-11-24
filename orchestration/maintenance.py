@@ -36,7 +36,7 @@ METADATA_PROPERTIES = {
 @dataclass(frozen=True)
 class TablePolicy:
     table: str
-    partition_column: str | None  # the column the table's day partitions derive from
+    partition_column: str | None  # day partitions derive from it; None = compact it whole
     compact_before_days: int | None  # None = no compaction (tiny tables)
     # How long old snapshots (and the files only they reference) are kept. Only bronze needs
     # days: silver streams from it and its checkpoint records the bronze snapshot it reached.
@@ -51,11 +51,11 @@ POLICIES = [
     TablePolicy("silver.trust_movement", "actual_ts", 2),
     TablePolicy("silver.rejected_messages", None, None),
     TablePolicy("ref.locations", None, None),
-    # Gold is rewritten whole by every dbt build (one snapshot each, 96 a day): no compaction,
-    # 12 hours of history (ADR-017).
-    TablePolicy("gold.punctuality_hourly", None, None),
-    TablePolicy("gold.delay_hotspots", None, None),
-    TablePolicy("gold.reactionary_delay", None, None),
+    # Every dbt build replaces the last 3 days' rows (ADR-018): small new files and delete
+    # files 96 times a day. The tables are small, so each is compacted whole every night.
+    TablePolicy("gold.punctuality_hourly", None, 0),
+    TablePolicy("gold.delay_hotspots", None, 0),
+    TablePolicy("gold.reactionary_delay", None, 0),
 ]
 
 
@@ -69,7 +69,8 @@ def compaction_sql(policy: TablePolicy, now: datetime) -> str | None:
         return None
     midnight = now.astimezone(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
     cutoff = midnight - timedelta(days=policy.compact_before_days)
-    where = f"{policy.partition_column} < '{cutoff:%Y-%m-%d %H:%M:%S}'"
+    column = policy.partition_column
+    where = f"{column} < '{cutoff:%Y-%m-%d %H:%M:%S}'" if column else None
     options = {
         "min-input-files": "2",
         "target-file-size-bytes": str(TARGET_FILE_BYTES),
@@ -82,7 +83,8 @@ def compaction_sql(policy: TablePolicy, now: datetime) -> str | None:
     opts = ", ".join(f"'{k}', '{v}'" for k, v in options.items())
     return (
         f"CALL {CATALOG}.system.rewrite_data_files(table => '{policy.table}', "
-        f'where => "{where}", options => map({opts}))'
+        + (f'where => "{where}", ' if where else "")
+        + f"options => map({opts}))"
     )
 
 

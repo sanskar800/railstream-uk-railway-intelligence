@@ -4,7 +4,9 @@
   dbt's standard `table` builds `<name>__dbt_tmp` and renames it into place; DuckDB-Iceberg
   refuses that rename, and it has no CREATE OR REPLACE. Instead:
   - first build (or --full-refresh): CREATE TABLE ... AS
-  - every later build: DELETE all rows and INSERT the new result in ONE transaction, which
+  - every later build: DELETE the rows being rebuilt (all, or only the rolling window when
+    the model sets rebuild_window_column, ADR-018) and INSERT the new result in ONE
+    transaction, which
     Iceberg commits as a single snapshot. Readers see the old or the new table, never an empty
     or half-built one. A changed column list needs --full-refresh (INSERT ... BY NAME fails).
   The statements run inside dbt's transaction and the materialization must commit it, as dbt's
@@ -12,6 +14,7 @@
 #}
 {% materialization iceberg_table, adapter='duckdb' %}
   {%- set target_relation = this.incorporate(type='table') -%}
+  {%- set window_column = config.get('rebuild_window_column') -%}
   {%- set existing = adapter.get_relation(database=this.database, schema=this.schema,
                                           identifier=this.identifier) -%}
   {{ run_hooks(pre_hooks) }}
@@ -26,7 +29,8 @@
     {% call statement('main') %}create table {{ target_relation }} as {{ sql }}{% endcall %}
   {% else %}
     {% call statement('main') %}
-      delete from {{ target_relation }};
+      delete from {{ target_relation }}
+      {%- if window_column %} where {{ in_rebuild_window(window_column) }}{% endif %};
       insert into {{ target_relation }} by name {{ sql }}
     {% endcall %}
   {% endif %}

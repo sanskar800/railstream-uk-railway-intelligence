@@ -15,6 +15,7 @@ models:
       +materialized: iceberg_table  # macros/iceberg_table.sql: atomic content swap in Iceberg
       +database: lake
       +schema: gold
+      +rebuild_window_column: local_date  # rebuild only recent dates (ADR-018)
 
 seeds:
   railstream:
