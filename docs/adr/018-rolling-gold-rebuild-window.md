@@ -22,7 +22,7 @@ ADR-017 rebuilt every gold table in full each time: `DELETE` every row, then `IN
 ## Alternatives rejected
 
 - **Raise the container limit.** Postpones the same failure: both the delete files and silver keep growing.
-- **dbt `incremental` materialization.** dbt-duckdb's incremental strategies use `MERGE`/temporary relations that DuckDB-Iceberg does not support (same root as ADR-017); the window inside our own materialization keeps one tested code path.
+- **dbt `incremental` materialization.** Not tried against DuckDB-Iceberg; it works through temporary relations, and ADR-017's spike showed dbt's standard relation handling (rename) failing there. Adding the window to our own, already tested materialization was a smaller change than validating a second code path. Would also need a nightly compaction for the same delete-file reason.
 - **Partitioning gold by date and replacing partitions.** DuckDB-Iceberg has no partition overwrite; it would still write delete files.
 
 ## Consequences
