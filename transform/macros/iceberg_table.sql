@@ -20,6 +20,9 @@
   {{ run_hooks(pre_hooks) }}
   {% if existing is not none and should_full_refresh() %}
     {% call statement('drop_for_full_refresh') %}drop table {{ target_relation }}{% endcall %}
+    {#- DuckDB-Iceberg cannot re-create a table dropped in the same transaction ("Not
+        implemented"): commit the drop first. Readers briefly see no table (findings F33). -#}
+    {% do adapter.commit() %}
     {% set existing = none %}
   {% endif %}
   {% if existing is none %}
