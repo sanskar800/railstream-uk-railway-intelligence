@@ -357,3 +357,16 @@ Task 10.3. Official file: Rail Data Marketplace historic delay attribution, rail
 - **Our reactionary is a lower bound**, about an eighth of the official share. The heuristic only sees trains queuing at the same place; official attribution follows an incident's minutes along whole routes and through unit and crew links. The *where* partly agrees (11 of the top 20).
 - Evidence: `results/dev/2026-11-23-attribution-check/{summary,locations}.parquet`; official-side queries in this session.
 - Found on the way: gold had almost no data for 21 Nov; bronze was missing 20 Nov 18:15 - 22 Nov 18:04 UTC. Archive complete; replayed (correction in F28).
+
+## F32. Gold builds ran out of memory: DuckDB's DELETE leaves every old row behind (2026-11-24)
+
+From 04:45 UTC on 24 Nov every scheduled gold build failed (45 runs; last success 04:30). The Airflow container was **OOM-killed** at its 3 GB limit (`OOMKilled=true`; the kernel killed Airflow's API server, so tasks also reported "connection refused").
+
+- **Measured, not guessed:** dbt alone in a separate container: `punctuality_hourly` 49 s / 1.0 GB, `delay_hotspots` 246 s / **3 GiB** (at the limit). Restricting the silver read to 3 days changed nothing for hotspots (203 s, 3 GiB), while `reactionary_delay`, on the same per-report model, took 21 s: the cost was in the *target table*, not in silver.
+- **Cause:** `gold.delay_hotspots` held **79,402,516 rows in 600 data files and 78,254,357 in 599 delete files**, for 1,148,159 live rows. DuckDB-Iceberg's `DELETE` writes positional delete files and never drops data files, even fully deleted ones; each full rebuild (about 90 a day) added one of each, and gold had no compaction. Punctuality (19.5 M stored / 0.15 M live) and reactionary (9.9 M / 0.15 M) had the same growth. Silver's own delete files were not the cause (1,085 files but only 7,561 deleted rows).
+- **Fix (ADR-018):** rebuild only the last 3 UK dates; `make gold-backfill` for history in 7-day chunks; gold compacted whole every night; no gold build in the maintenance hour. A one-off Spark compaction: hotspots **1,199 files / 1.46 GB → 2 files / 11.2 MB**, punctuality 273 → 2, reactionary 137 → 2.
+- **After:** full `dbt build` **151 s, peak 1.56 GB, 31/31 tests**; hotspots 21 s; first scheduled run 3.5 min; Airflow back to 768 MB.
+- The first window build failed a reconciliation test: a 0.1 % tolerance over 3 days is ~25 rows, less than the arrivals during a 9-minute build. The tests now compare only events received up to gold's newest `latest_received_at` (exact apart from one micro-batch).
+- **Open:** delete files still accumulate between nightly compactions; check the last builds before 03:00 on 25 Nov (time and memory).
+- **Detection gap:** 45 failed runs over 11 hours raised no alert; Airflow failures are not wired to the email topic (ADR-014 covers the feed and disk only).
+- Evidence: Airflow task logs, `docker inspect`, `dmesg`, `.files` metadata queries and timed dbt runs in this session (2026-11-24 15:20-16:25 UTC).

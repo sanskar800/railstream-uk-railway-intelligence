@@ -26,3 +26,7 @@ ADR-004 chose dbt on DuckDB for gold and left one question to a time-boxed spike
 - Each build adds one snapshot per gold table; gold is covered by the 12-hour retention class when added to Iceberg maintenance.
 - Found while building: without `adapter.commit()` the materialization reported success while DuckDB rolled the table back (findings F29).
 - Full rebuilds take ~55 s on the 2-OCPU VM (delay hotspots ~50 s over all of silver); incremental models are the next step if the 15-minute schedule makes that too heavy. Measured on Day 10 with three models and all tests: ~2.5 min per scheduled build, Airflow (with DuckDB inside) peaking at ~2.0 GB of 3 GB.
+
+## Update 2026-11-24
+
+Full rebuilds every 15 minutes failed within a day of scheduling: DuckDB's `DELETE` writes delete files and never drops data files, so the tables grew to ~70 times their live size and builds ran out of memory. Superseded in part by ADR-018 (rolling 3-day window, nightly gold compaction).
