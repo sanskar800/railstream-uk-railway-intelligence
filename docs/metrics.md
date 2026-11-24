@@ -25,7 +25,8 @@ Punctuality uses passenger trains only (as official measures do). Hotspots inclu
 |---|---|
 | `delay_wtt_min` | `timetable_variation` with sign: `LATE` → +n, `EARLY` → −n, `ON TIME` → 0. Against the **working timetable** (`planned_timestamp`), which includes passing points |
 | `delay_gbtt_min` | `actual_ts − gbtt_ts` in whole minutes, only where `gbtt_timestamp` is present (passenger stops). Against the **public timetable** passengers see |
-| `delay_gained_min` | For consecutive reports of the same `train_id` ordered by `actual_ts`: `max(0, delay_wtt_min − previous delay_wtt_min)`, attributed to the later report's location. The first report of a train gains nothing, and neither does a report more than 6 hours after the previous one (the `train_id` was reused: its last two characters are the day of month) |
+| `delay_gained_min` | For consecutive reports of the same `train_id` ordered by `actual_ts`: `max(0, delay_wtt_min − previous delay_wtt_min)`, attributed to the later report's location. A train's **first report**, or one more than 6 hours after the previous (the `train_id` was reused: its last two characters are the day of month), starts its journey: if it is a **departure**, its lateness `max(0, delay_wtt_min)` is gained there (the train left late; 97.7 % of such reports are at the origin its activation names, findings F33); if it is an arrival, it gains nothing |
+| `origin_delay_min` | The part of `delay_gained_min` from trains starting their journey late (hotspots column) |
 | `delay_recovered_min` | The negative part of the same difference (time made up) |
 
 **Why two timetables:** punctuality is about what passengers were promised (public timetable). Where delay is *created* is an operational question, and passing points (junctions) only exist in the working timetable.
@@ -111,3 +112,4 @@ immutable. See [silver-design.md](silver-design.md) and ADR-009 for details.
 - 2026-11-23: `gold.reactionary_delay` built with heuristic v1 as defined above (findings F30). A maximum cluster length (v2) is proposed, not applied.
 - 2026-11-23: heuristic v2 accepted and applied: clusters capped at 2 hours (findings F30).
 - 2026-11-23: pattern check against official attribution P05 (findings F31). Known gap: origin late starts (25.7 % of official delay minutes) count as zero gained; a fix is proposed, not applied.
+- 2026-11-24: origin late starts accepted: a train's first report gains its lateness when it is a departure; new hotspots column `origin_delay_min`. Gold rebuilt for all dates (findings F33).

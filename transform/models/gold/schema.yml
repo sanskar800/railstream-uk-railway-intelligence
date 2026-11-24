@@ -45,10 +45,16 @@ models:
           arguments: {expression: "delay_gained_min >= 0 and delay_recovered_min >= 0"}
       - expression_is_true:
           arguments: {expression: "rank_in_hour >= 1"}
+      - expression_is_true:
+          arguments: {expression: "coalesce(origin_delay_min, 0) <= delay_gained_min"}
     columns:
       - name: delay_gained_min
-        description: Sum over reports at this location of max(0, delay - previous delay).
+        description: >
+          Sum over reports at this location of max(0, delay - previous delay); a train's first
+          report counts its lateness if it is a departure (metrics.md §3).
         data_tests: [not_null]
+      - name: origin_delay_min
+        description: Part of delay_gained_min from trains starting their journey late here.
       - name: rank_in_hour
         description: 1 = the location where most delay was gained in that hour.
 

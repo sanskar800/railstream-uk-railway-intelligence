@@ -19,10 +19,15 @@ with ordered as (
 , changes as (
 select
     *,
-    -- The first report of a train gains nothing. A gap of more than 6 hours means the train_id
-    -- was reused (its last two characters are the day of month): start afresh.
+    -- A train's first report starts its journey: if it is a departure, the train left late and
+    -- that lateness was created there (97.7 % of such reports are at the origin named by the
+    -- train's activation, findings F33); a first ARRIVAL gains nothing (where its delay arose is
+    -- unknown). A gap of more than 6 hours means the train_id was reused (its last two
+    -- characters are the day of month): start afresh.
+    previous_delay is null or actual_ts - previous_ts > interval 6 hours as starts_journey,
     case
-        when previous_delay is null or actual_ts - previous_ts > interval 6 hours then 0
+        when previous_delay is null or actual_ts - previous_ts > interval 6 hours
+            then case when planned_event_type = 'DEPARTURE' then greatest(delay_wtt_min, 0) else 0 end
         else delay_wtt_min - previous_delay
     end as delay_change,
     timezone('Europe/London', actual_ts) as actual_local
