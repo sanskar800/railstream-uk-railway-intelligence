@@ -379,7 +379,7 @@ From 04:45 UTC on 24 Nov every scheduled gold build failed (45 runs; last succes
 - A manual run collided with a scheduled build on dbt's DuckDB file lock ("Could not set lock"): pausing a DAG does not stop a run already started. The lock prevented two writers, as it should.
 - **Stability after ADR-018:** 70 scheduled builds from 24 Nov 16:45 to 25 Nov 11:00, **all successful**, 32/32 tests each; median 163 s, max 284 s (morning peak, CPU shared with silver). Builds just before the 03:00 compaction (most delete files) took ~150 s: delete-file growth within a day is not a problem. No OOM; disk 20 %.
 
-**Attribution pattern check re-run** (same P05 file, same 6-19 Nov window; `results/dev/2026-11-25-attribution-check/`, before: `2026-11-23-…`):
+**Attribution pattern check re-run** (same P05 file, same 6-19 Nov window; `results/dev/2026-11-25-attribution-check-late-starts/`, before: `2026-11-23-…`):
 
 | | Before | After |
 |---|---|---|
@@ -392,6 +392,19 @@ From 04:45 UTC on 24 Nov every scheduled gold build failed (45 runs; last succes
 
 - Our late-start share is 12.8 % of delay gained (official 25.7 %): not over-counted; first reports that are arrivals still gain nothing.
 
-**Minute-rounding noise (new, not fixed).** F31's "totals agree within 6 %" held only for the top 100 locations. Network-wide, official attribution has ~70 k delay minutes per day (1,965,036 `M` minutes / 28 days, passenger operators), we count ~314 k gained per day (all trains). Distribution of changes between consecutive reports, 18 Nov: **+1 minute: 169,703 reports = 169,703 min, 56 % of all minutes gained**; +2: 37,126 min; +3 or more: 94,178 min; recovered 263,948 min. TRUST times are whole minutes, so a train running steadily about 2 minutes late reads 2, 3, 2, 3 …: each step up counts as gained and each step down as recovered. Gains of 3+ minutes alone (~94 k all trains, roughly 70 k passenger) are close to the official volume. Proposal (not applied; changes a metric definition): count delay gained only from steps of 3 minutes or more, or report it alongside. The rankings already correlate, so this mainly changes absolute minutes.
+**Minute-rounding noise (new, not fixed).** F31's "totals agree within 6 %" held only for the top 100 locations. Network-wide, official attribution has ~70 k delay minutes per day (1,965,036 `M` minutes / 28 days, passenger operators), we count ~314 k gained per day (all trains). Distribution of changes between consecutive reports, 18 Nov: **+1 minute: 169,703 reports = 169,703 min, 56 % of all minutes gained**; +2: 37,126 min; +3 or more: 94,178 min; recovered 263,948 min. TRUST times are whole minutes, so a train running steadily about 2 minutes late reads 2, 3, 2, 3 …: each step up counts as gained and each step down as recovered. Gains of 3+ minutes alone (~94 k all trains, roughly 70 k passenger) are close to the official volume. Proposal: count delay gained only from steps of 3 minutes or more (accepted and applied the same day, below).
 
 - Evidence: activation join and change-distribution queries, Airflow run list (JSON), dbt logs, and the two attribution-check result folders, in sessions 2026-11-24 16:25-16:41 and 2026-11-25 11:05-11:30 UTC.
+- **Threshold applied (2026-11-25 11:12-11:32 UTC):** delay gained and recovered count only steps of 3+ minutes (`delay_step_threshold_min`, one variable for hotspots and reactionary); history rebuilt (4 chunks, then `dbt build` 32/32). Re-run, `results/dev/2026-11-25-attribution-check-threshold/`:
+
+| | Original (23 Nov) | + late starts | + 3-minute threshold | Official |
+|---|---|---|---|---|
+| Rank correlation, delay by location | 0.328 | 0.639 | **0.711** | |
+| Rank correlation, reactionary | 0.413 | 0.764 | 0.764 | |
+| Top-20 overlap, delay / reactionary | 5 / 11 | 10 / 13 | **12** / 13 | |
+| Reactionary share of delay | 8.8 % | 13.3 % | **52.5 %** | 66.5 % |
+| Passenger delay gained per day, network | ~220 k | | **57.7 k** | ~70.2 k |
+| Late-start share of delay gained | | 12.8 % | **29.0 %** | 25.7 % |
+| Top-100 locations, min per day | 31,264 | 42,275 | 20,322 | 29,472 |
+
+  The reactionary ranking is unchanged (it already used 3+ minutes); its *share* rose because the denominator lost the rounding noise. Volume moved from ~3x the official figure to 18 % under it. The remaining gap may be the 1-2-minute creep the threshold ignores by design, and the different season (summer vs. November); neither is tested.
