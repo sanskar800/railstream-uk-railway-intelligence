@@ -11,7 +11,6 @@
 -- inside the window are kept, so a cluster crossing midnight is never cut in two (ADR-018).
 -- Limitations (shown wherever the metric is): misses knock-on delay at OTHER locations, can
 -- merge independent problems at busy junctions, ignores unit and crew links between services.
-{% set min_gain_min = 3 %}
 {% set gap_minutes = 30 %}
 {% set max_cluster_minutes = 120 %}
 
@@ -24,9 +23,9 @@ with events as (
         is_passenger,
         actual_ts,
         actual_local,
-        delay_change as gain_min
+        delay_gained_min as gain_min
     from {{ ref('int_delay_changes') }}
-    where delay_change >= {{ min_gain_min }}
+    where delay_gained_min > 0  -- a step of 3+ minutes (var delay_step_threshold_min)
 ),
 
 marked as (

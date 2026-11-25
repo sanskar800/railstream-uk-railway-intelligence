@@ -50,8 +50,9 @@ models:
     columns:
       - name: delay_gained_min
         description: >
-          Sum over reports at this location of max(0, delay - previous delay); a train's first
-          report counts its lateness if it is a departure (metrics.md §3).
+          Sum over reports at this location of steps up of 3+ minutes in delay (smaller steps
+          are minute-rounding noise); a train's first report counts its lateness if it is a
+          departure (metrics.md §3).
         data_tests: [not_null]
       - name: origin_delay_min
         description: Part of delay_gained_min from trains starting their journey late here.

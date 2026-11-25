@@ -8,7 +8,7 @@ with cutoff as (
     where {{ in_rebuild_window('local_date') }}
 ),
 detail as (
-    select sum(greatest(delay_change, 0)) as n from {{ ref('int_delay_changes') }}
+    select sum(delay_gained_min) as n from {{ ref('int_delay_changes') }}
     where {{ in_rebuild_window('cast(actual_local as date)') }}
       and received_at <= (select ts from cutoff)
 ),

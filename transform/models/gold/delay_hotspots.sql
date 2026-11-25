@@ -8,12 +8,12 @@ with per_location as (
         loc_stanox,
         any_value(location_name) as location_name,
         any_value(crs) as crs,
-        sum(greatest(delay_change, 0)) as delay_gained_min,
-        count(distinct train_id) filter (where delay_change > 0) as trains_gaining_delay,
-        sum(greatest(delay_change, 0)) filter (where is_passenger) as passenger_delay_gained_min,
+        sum(delay_gained_min) as delay_gained_min,  -- steps of 3+ minutes (metrics.md §3)
+        count(distinct train_id) filter (where delay_gained_min > 0) as trains_gaining_delay,
+        sum(delay_gained_min) filter (where is_passenger) as passenger_delay_gained_min,
         -- trains starting their journey late here (part of delay_gained_min, metrics.md §3)
-        sum(greatest(delay_change, 0)) filter (where starts_journey) as origin_delay_min,
-        sum(greatest(-delay_change, 0)) as delay_recovered_min,
+        sum(delay_gained_min) filter (where starts_journey) as origin_delay_min,
+        sum(delay_recovered_min) as delay_recovered_min,
         max(received_at) as latest_received_at
     from {{ ref('int_delay_changes') }}
     where {{ in_rebuild_window('cast(actual_local as date)') }}

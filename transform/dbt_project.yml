@@ -17,6 +17,11 @@ models:
       +schema: gold
       +rebuild_window_column: local_date  # rebuild only recent dates (ADR-018)
 
+vars:
+  # TRUST times are whole minutes, so delay wobbles +/-1 between reports; steps smaller than
+  # this are rounding noise, not delay gained or recovered (docs/metrics.md §3, findings F33).
+  delay_step_threshold_min: 3
+
 seeds:
   railstream:
     operators:

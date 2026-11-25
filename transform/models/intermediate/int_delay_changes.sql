@@ -32,9 +32,21 @@ select
     end as delay_change,
     timezone('Europe/London', actual_ts) as actual_local
 from ordered
+),
+
+thresholded as (
+select
+    *,
+    -- Steps under the threshold are minute-rounding noise (findings F33): 56 % of raw gains
+    -- were +1 steps, nearly all recovered again. delay_change keeps the raw step.
+    case when delay_change >= {{ var('delay_step_threshold_min') }} then delay_change else 0 end
+        as delay_gained_min,
+    case when delay_change <= -{{ var('delay_step_threshold_min') }} then -delay_change else 0 end
+        as delay_recovered_min
+from changes
 )
 
-select * from changes
+select * from thresholded
 where cast(actual_local as date) >= {{ rebuild_from() }} - interval 1 day
 {%- if rebuild_to() %}
   and cast(actual_local as date) < {{ rebuild_to() }} + interval 1 day

@@ -25,9 +25,11 @@ Punctuality uses passenger trains only (as official measures do). Hotspots inclu
 |---|---|
 | `delay_wtt_min` | `timetable_variation` with sign: `LATE` → +n, `EARLY` → −n, `ON TIME` → 0. Against the **working timetable** (`planned_timestamp`), which includes passing points |
 | `delay_gbtt_min` | `actual_ts − gbtt_ts` in whole minutes, only where `gbtt_timestamp` is present (passenger stops). Against the **public timetable** passengers see |
-| `delay_gained_min` | For consecutive reports of the same `train_id` ordered by `actual_ts`: `max(0, delay_wtt_min − previous delay_wtt_min)`, attributed to the later report's location. A train's **first report**, or one more than 6 hours after the previous (the `train_id` was reused: its last two characters are the day of month), starts its journey: if it is a **departure**, its lateness `max(0, delay_wtt_min)` is gained there (the train left late; 97.7 % of such reports are at the origin its activation names, findings F33); if it is an arrival, it gains nothing |
+| `delay_gained_min` | For consecutive reports of the same `train_id` ordered by `actual_ts`: the step `delay_wtt_min − previous delay_wtt_min` when it is **3 minutes or more** (smaller steps are minute-rounding noise: TRUST times are whole minutes, so a train steadily ~2 minutes late reads 2, 3, 2, 3 …; findings F33), attributed to the later report's location. A train's **first report**, or one more than 6 hours after the previous (the `train_id` was reused: its last two characters are the day of month), starts its journey: if it is a **departure**, its lateness `delay_wtt_min` (if 3 minutes or more) is gained there (the train left late; 97.7 % of such reports are at the origin its activation names, findings F33); if it is an arrival, it gains nothing |
 | `origin_delay_min` | The part of `delay_gained_min` from trains starting their journey late (hotspots column) |
-| `delay_recovered_min` | The negative part of the same difference (time made up) |
+| `delay_recovered_min` | Steps down of 3 minutes or more (time made up) |
+
+**Threshold trade-off:** delay that creeps up by 1-2 minutes at each of several reports is real but not counted. Official delay attribution likewise records delays of a few minutes or more at a point, not every minute. The raw step stays available as `delay_change` in the intermediate model.
 
 **Why two timetables:** punctuality is about what passengers were promised (public timetable). Where delay is *created* is an operational question, and passing points (junctions) only exist in the working timetable.
 
@@ -53,7 +55,7 @@ Punctuality uses passenger trains only (as official measures do). Hotspots inclu
 TRUST records what happened, not why, so reactionary delay is an **inference**. Official attribution is done by people using the Delay Attribution Guide; this heuristic approximates one part of it: trains queuing behind a problem at the same place.
 
 **Heuristic v2 (same-location clustering, capped):**
-1. A **delay event** is a report with `delay_gained_min ≥ 3` (v1).
+1. A **delay event** is a report with a step of 3+ minutes (`delay_gained_min > 0`, the same threshold as §3).
 2. An **incident cluster** at a location starts with a delay event when no cluster is open there, and stays open while further delay events occur at that location within **30 minutes** (v1) of the previous one.
 2b. **(v2)** A cluster lasts at most **2 hours**: it is split into 2-hour windows counted from its first event, and each window is a cluster with its own primary train. (v1 had no cap; a busy station then never closed its cluster, findings F30.)
 3. The first train's gain is the **primary delay**; gains by other trains in the cluster are **reactionary delay**.
@@ -113,3 +115,4 @@ immutable. See [silver-design.md](silver-design.md) and ADR-009 for details.
 - 2026-11-23: heuristic v2 accepted and applied: clusters capped at 2 hours (findings F30).
 - 2026-11-23: pattern check against official attribution P05 (findings F31). Known gap: origin late starts (25.7 % of official delay minutes) count as zero gained; a fix is proposed, not applied.
 - 2026-11-24: origin late starts accepted: a train's first report gains its lateness when it is a departure; new hotspots column `origin_delay_min`. Gold rebuilt for all dates (findings F33).
+- 2026-11-25: delay gained and recovered count only steps of 3+ minutes (`delay_step_threshold_min`); 56 % of raw gains were +1-minute rounding noise (findings F33). Gold rebuilt for all dates.
