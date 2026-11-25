@@ -21,7 +21,9 @@ select
     m.is_offroute,
     m.identity_unresolved,
     m.revision_conflict,
-    m.received_at
+    m.received_at,
+    m.msg_queue_ts,  -- with event_key, makes each train's report order total (int_delay_changes)
+    m.event_key
 from {{ source('silver', 'trust_movement') }} as m
 -- metrics.md §2: off-route reports and calls without a plan have no meaningful delay.
 where m.variation_status <> 'OFF ROUTE'

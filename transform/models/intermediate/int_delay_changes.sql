@@ -13,7 +13,15 @@ with ordered as (
     from {{ ref('stg_movements') }} as m
     left join {{ ref('operators') }} as o on o.sector_code = m.toc_id
     where {{ silver_window('m.actual_ts', before_days=2) }}
-    window train as (partition by m.train_id order by m.actual_ts, m.planned_ts)
+    -- A TOTAL order: ~43 k report pairs a day share actual and planned time (an arrival and
+    -- departure, or two points in one minute). Left unordered, lag() could pick either and
+    -- the same silver could give different gold (findings F34). Arrival before departure,
+    -- then TRUST's queue order, then event_key, which is unique.
+    window train as (
+        partition by m.train_id
+        order by m.actual_ts, m.planned_ts, case when m.event_type = 'ARRIVAL' then 0 else 1 end,
+            m.msg_queue_ts, m.event_key
+    )
 )
 
 , changes as (
