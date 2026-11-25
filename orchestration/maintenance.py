@@ -155,7 +155,12 @@ def connect():
     from pyspark.sql import SparkSession
 
     url = os.environ.get("SPARK_CONNECT_URL", "sc://spark-connect:15002")
-    return SparkSession.builder.remote(url).getOrCreate()
+    spark = SparkSession.builder.remote(url).getOrCreate()
+    # No broadcast joins: on 2026-11-20 Spark misjudged a maintenance join as small, tried to
+    # broadcast it from the 1 GB driver and failed ("Not enough memory to build and broadcast"),
+    # skipping every table that night (findings F34). Sort-merge joins are bounded in memory.
+    spark.conf.set("spark.sql.autoBroadcastJoinThreshold", "-1")
+    return spark
 
 
 def policy_for(table: str) -> TablePolicy:
