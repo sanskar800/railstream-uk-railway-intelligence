@@ -370,3 +370,28 @@ From 04:45 UTC on 24 Nov every scheduled gold build failed (45 runs; last succes
 - **Open:** delete files still accumulate between nightly compactions; check the last builds before 03:00 on 25 Nov (time and memory).
 - **Detection gap:** 45 failed runs over 11 hours raised no alert; Airflow failures are not wired to the email topic (ADR-014 covers the feed and disk only).
 - Evidence: Airflow task logs, `docker inspect`, `dmesg`, `.files` metadata queries and timed dbt runs in this session (2026-11-24 15:20-16:25 UTC).
+
+## F33. Late starts counted; ranking match with official attribution doubles; most "delay gained" is minute-rounding noise (2026-11-25)
+
+**Late starts (accepted 2026-11-24).** Validation before changing the metric, 23 Nov: of trains whose first report was a DEPARTURE, **28,877 were at the origin named by their activation (`0001` `sched_origin_stanox`), 675 elsewhere, 8 without an activation (97.7 %)**; first reports that were arrivals were almost never at the origin (4 of 797). So a first-report departure counts its lateness `max(0, delay)` as gained (metrics.md §3); joining activations would make it exact but needs a new silver table (not done). New hotspots column `origin_delay_min`.
+
+- **Deploying found a Day 9 bug:** `--full-refresh` had never worked on an existing table: DuckDB-Iceberg refuses to re-create a table dropped in the same transaction ("Not implemented"). The transaction rolled back, so nothing was lost; the materialization now commits the drop first. Gold history then rebuilt with `make gold-backfill FROM=2026-10-30`: 4 chunks, **236 s**, no errors.
+- A manual run collided with a scheduled build on dbt's DuckDB file lock ("Could not set lock"): pausing a DAG does not stop a run already started. The lock prevented two writers, as it should.
+- **Stability after ADR-018:** 70 scheduled builds from 24 Nov 16:45 to 25 Nov 11:00, **all successful**, 32/32 tests each; median 163 s, max 284 s (morning peak, CPU shared with silver). Builds just before the 03:00 compaction (most delete files) took ~150 s: delete-file growth within a day is not a problem. No OOM; disk 20 %.
+
+**Attribution pattern check re-run** (same P05 file, same 6-19 Nov window; `results/dev/2026-11-25-attribution-check/`, before: `2026-11-23-…`):
+
+| | Before | After |
+|---|---|---|
+| Rank correlation, delay by location | 0.328 | **0.639** |
+| Rank correlation, reactionary by location | 0.413 | **0.764** |
+| Top-20 overlap, delay / reactionary | 5 / 11 | **10 / 13** |
+| Our reactionary share (official 66.5 %) | 8.8 % | 13.3 % |
+| Victoria / Waterloo / Euston, min per day (official 773 / 746 / 727) | 92 / 132 / 125 | **592 / 634 / 531** |
+| Top-100 delay minutes per day (official 29,472) | 31,265 | 42,275 |
+
+- Our late-start share is 12.8 % of delay gained (official 25.7 %): not over-counted; first reports that are arrivals still gain nothing.
+
+**Minute-rounding noise (new, not fixed).** F31's "totals agree within 6 %" held only for the top 100 locations. Network-wide, official attribution has ~70 k delay minutes per day (1,965,036 `M` minutes / 28 days, passenger operators), we count ~314 k gained per day (all trains). Distribution of changes between consecutive reports, 18 Nov: **+1 minute: 169,703 reports = 169,703 min, 56 % of all minutes gained**; +2: 37,126 min; +3 or more: 94,178 min; recovered 263,948 min. TRUST times are whole minutes, so a train running steadily about 2 minutes late reads 2, 3, 2, 3 …: each step up counts as gained and each step down as recovered. Gains of 3+ minutes alone (~94 k all trains, roughly 70 k passenger) are close to the official volume. Proposal (not applied; changes a metric definition): count delay gained only from steps of 3 minutes or more, or report it alongside. The rankings already correlate, so this mainly changes absolute minutes.
+
+- Evidence: activation join and change-distribution queries, Airflow run list (JSON), dbt logs, and the two attribution-check result folders, in sessions 2026-11-24 16:25-16:41 and 2026-11-25 11:05-11:30 UTC.
