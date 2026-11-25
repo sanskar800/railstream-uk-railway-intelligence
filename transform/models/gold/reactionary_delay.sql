@@ -70,8 +70,10 @@ clusters as (
         min(actual_ts) as cluster_start,
         max(actual_ts) as cluster_end,
         min(actual_local) as cluster_start_local,
-        arg_min(train_id, actual_ts) as primary_train_id,
-        arg_min(gain_min, actual_ts) as primary_delay_min,
+        -- One deterministic choice for both: two trains can open a cluster in the same minute,
+        -- and two separate arg_min calls could pick different ones (findings F34).
+        first(train_id order by actual_ts, train_id) as primary_train_id,
+        first(gain_min order by actual_ts, train_id) as primary_delay_min,
         count(*) as delay_events
     from windowed
     group by loc_stanox, cluster_seq, window_seq
