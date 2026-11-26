@@ -31,7 +31,7 @@ def main() -> None:
     if not host:
         sys.exit("Set CORE_HOST=ubuntu@<processing-vm-public-ip> in .env")
     key = Path(env.get("CAPTURE_SSH_KEY", Path.home() / ".ssh" / "railstream_oci")).expanduser()
-    rows = os.environ.get("SQL_ROWS", "50")  # rows printed per statement
+    rows = os.environ.get("SQL_ROWS") or "50"  # rows printed per statement (empty = default)
     if not rows.isdigit():
         sys.exit("SQL_ROWS must be a number")
     remote = REMOTE.replace(
