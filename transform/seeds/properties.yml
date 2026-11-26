@@ -17,3 +17,9 @@ seeds:
           - accepted_values:
               arguments:
                 values: [long_distance, regional]
+  - name: golden_2026_11_18
+    description: >
+      Golden values (task 11.4): gold aggregates for UK local date 2026-11-18, the day gold was
+      recomputed independently in Spark and matched exactly (findings F34). Punctuality per
+      operator (arrivals, on time, summed delay) and hotspot and reactionary totals. If a
+      deliberate metric change moves them, regenerate this file in the same commit and say why.

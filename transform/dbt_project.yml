@@ -36,3 +36,8 @@ seeds:
         atoc_code: varchar
         is_passenger: boolean
         service_group: varchar
+    golden_2026_11_18:  # expected gold aggregates for one fixed day (tests/assert_golden_day.sql)
+      +column_types:
+        metric: varchar
+        key: varchar
+        value: bigint
