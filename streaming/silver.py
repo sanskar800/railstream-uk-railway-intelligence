@@ -13,6 +13,7 @@ import logging
 import os
 import re
 import signal
+import time
 
 from pyspark import StorageLevel
 from pyspark.sql import functions as F
@@ -177,8 +178,18 @@ def process_classified_batch(
 ):
     spark = classified.sparkSession
     classified = classified.persist(StorageLevel.DISK_ONLY)
+    # Seconds per phase, logged with each batch: where a slow batch spends its time (F35).
+    timing, mark = {}, time.monotonic()
+
+    def lap(phase):
+        nonlocal mark
+        now = time.monotonic()
+        timing[phase] = round(now - mark, 1)
+        mark = now
+
     try:
         counts = {r["status"]: r["count"] for r in classified.groupBy("status").count().collect()}
+        lap("read_classify")  # the first action: reads the bronze micro-batch and classifies it
         if counts.get("movement"):
             movements = classified.where("status='movement'").select("movement.*")
             if "_route" in classified.columns:
@@ -191,13 +202,16 @@ def process_classified_batch(
                 locations = reference_snapshot(spark, reference_table)
                 movements = enrich(movements, locations)
             bounds = batch_bounds(movements)
+            lap("bounds")
             # A revision's id covers its whole body: an identical one has the same actual time.
             revisions_window = between("actual_ts", bounds.actual_min, bounds.actual_max)
             merge_new(
                 spark, movements, f"{namespace}.movement_revisions", "revision_id",
                 prune=revisions_window,
             )  # fmt: skip
+            lap("revisions")
             merge_current(spark, movements, namespace, locations, bounds)
+            lap("current")
         if counts.get("rejected"):
             rejects = classified.where("status='rejected'").select("reject.*")
             merge_new(spark, rejects, f"{namespace}.rejected_messages", "record_id")
@@ -209,7 +223,13 @@ def process_classified_batch(
                 "left_semi",
             )
             publish_rejects(durable, dlq_topic)
+            lap("rejects")
         log.info("batch %s: %s", batch_id, counts)
+        if counts.get("movement"):
+            log.info(
+                "batch %s timing %s; actual %s..%s",
+                batch_id, timing, bounds.actual_min, bounds.actual_max,
+            )  # fmt: skip
         if "_route" in classified.columns:
             log.info(
                 "batch %s routes: %s",
