@@ -16,6 +16,7 @@
 | **Passenger train** | Headcode class (3rd character of `train_id`) is `1`, `2` or `9` **and** the operator is a passenger operator (`ref.operators.is_passenger`, i.e. ATOC code ≠ `ZZ`) | In one hour, passenger operators reported almost only classes 1/2/9 (+5 = empty stock) and freight operators mostly 0/3/4/6/7; each rule alone has exceptions (e.g. 6 class-1 movements by GB Railfreight), so both are required |
 | **Off-route reports** | Excluded (`variation_status = 'OFF ROUTE'`) | TRUST reports them with variation 0, which would count as on time |
 | **Unplanned locations** | Excluded from delay metrics when `planned_timestamp` is empty | No plan, no delay |
+| **Implausible delays** | Excluded from delay metrics when the delay is **12 hours or more** either way (`implausible_delay_min`); kept in silver | Feed artefacts, not lateness: `timetable_variation` stops at 999 (actual minus planned was 1,415 and 2,907 minutes), or a train was matched to another day's schedule (355T452Q21 ran on 21 Nov against its 22 Nov plan). 32 reports over 10 hours in 14.4 M; early running up to 2 hours is real (mostly freight) and kept (findings F34) |
 
 Punctuality uses passenger trains only (as official measures do). Hotspots include all trains, because freight delays occupy the same track, with a passenger-only column alongside.
 
@@ -116,3 +117,4 @@ immutable. See [silver-design.md](silver-design.md) and ADR-009 for details.
 - 2026-11-23: pattern check against official attribution P05 (findings F31). Known gap: origin late starts (25.7 % of official delay minutes) count as zero gained; a fix is proposed, not applied.
 - 2026-11-24: origin late starts accepted: a train's first report gains its lateness when it is a departure; new hotspots column `origin_delay_min`. Gold rebuilt for all dates (findings F33).
 - 2026-11-25: delay gained and recovered count only steps of 3+ minutes (`delay_step_threshold_min`); 56 % of raw gains were +1-minute rounding noise (findings F33). Gold rebuilt for all dates.
+- 2026-11-26: reports with a delay of 12 hours or more are left out of delay metrics (feed artefacts, findings F34). Gold rebuilt for all dates.

@@ -21,6 +21,10 @@ vars:
   # TRUST times are whole minutes, so delay wobbles +/-1 between reports; steps smaller than
   # this are rounding noise, not delay gained or recovered (docs/metrics.md §3, findings F33).
   delay_step_threshold_min: 3
+  # A delay this large is a feed artefact, not lateness: timetable_variation stops at 999, or the
+  # train was matched to another day's schedule ("999 minutes early"). Such reports stay in
+  # silver but are left out of delay metrics (docs/metrics.md §2, findings F34).
+  implausible_delay_min: 720
 
 seeds:
   railstream:

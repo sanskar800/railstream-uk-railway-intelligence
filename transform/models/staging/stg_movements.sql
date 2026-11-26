@@ -29,3 +29,5 @@ from {{ source('silver', 'trust_movement') }} as m
 where m.variation_status <> 'OFF ROUTE'
   and m.planned_ts is not null
   and not m.identity_unresolved
+  -- metrics.md §2: delays of 12 h or more are schedule mismatches or the 999 cap (F34).
+  and abs(m.delay_min) < {{ var('implausible_delay_min') }}
