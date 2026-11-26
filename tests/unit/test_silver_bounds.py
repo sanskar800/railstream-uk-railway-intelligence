@@ -79,3 +79,11 @@ def test_unresolved_rows_keep_their_own_actual_ranges():
         "((planned_ts IS NULL AND (actual_ts BETWEEN TIMESTAMP '2026-11-26 12:00:00.000000' "
         "AND TIMESTAMP '2026-11-26 12:00:00.000000')))"
     )
+
+
+def test_actual_predicate_takes_a_qualified_column_for_merge_conditions():
+    # merge_new embeds it after "t.key = s.key AND": the alias must be inside each range.
+    now = datetime(2026, 11, 26, 12, 0)
+    bounds = BatchBounds(now, now, None, None, actual_ranges=((now, now),))
+    assert actual_predicate(bounds, "t.actual_ts").startswith("(t.actual_ts BETWEEN")
+

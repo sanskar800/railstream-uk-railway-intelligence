@@ -91,10 +91,14 @@ def batch_bounds(movements) -> BatchBounds:
 
 
 def merge_new(spark, frame, table, key, prune: str | None = None):
-    """Insert rows whose key is not in the table yet; `prune` bounds the target scan."""
+    """Insert rows whose key is not in the table yet; `prune` bounds the target scan.
+
+    `prune` is a predicate on the target, written with the alias `t.` (e.g. from
+    actual_predicate(bounds, "t.actual_ts")).
+    """
     spark.catalog.refreshTable(table)
     frame.dropDuplicates([key]).createOrReplaceTempView("silver_insert")
-    condition = f"t.{key}=s.{key}" + (f" AND t.{prune}" if prune else "")
+    condition = f"t.{key}=s.{key}" + (f" AND {prune}" if prune else "")
     spark.sql(
         f"MERGE INTO {table} t USING silver_insert s ON {condition} WHEN NOT MATCHED THEN INSERT *"
     )
@@ -209,7 +213,7 @@ def process_classified_batch(
             bounds = batch_bounds(movements)
             lap("bounds")
             # A revision's id covers its whole body: an identical one has the same actual time.
-            revisions_window = actual_predicate(bounds)
+            revisions_window = actual_predicate(bounds, "t.actual_ts")
             merge_new(
                 spark, movements, f"{namespace}.movement_revisions", "revision_id",
                 prune=revisions_window,
