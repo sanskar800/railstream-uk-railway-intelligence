@@ -5,7 +5,9 @@ import pytest
 from orchestration.maintenance import (
     POLICIES,
     compaction_sql,
+    delete_cleanup_sql,
     expire_sql,
+    missing_columns,
     orphan_sql,
     policy_for,
     properties_sql,
@@ -21,9 +23,31 @@ def test_bronze_compacts_only_days_before_today():
     assert "'min-input-files', '2'" in sql and "'partial-progress.enabled', 'true'" in sql
 
 
-def test_current_calls_skip_the_last_two_days_of_merge_corrections():
+def test_current_calls_compact_everything_before_today():
+    # Three uncompacted days cost every MERGE ~2,900 delete files (findings F35).
     sql = compaction_sql(policy_for("silver.trust_movement"), NOW)
-    assert "actual_ts < '2026-11-16 00:00:00'" in sql
+    assert "actual_ts < '2026-11-18 00:00:00'" in sql
+
+
+def test_dangling_delete_files_are_rewritten_for_the_compacted_days_only():
+    sql = delete_cleanup_sql(policy_for("silver.trust_movement"), NOW)
+    assert "rewrite_position_delete_files(table => 'silver.trust_movement'" in sql
+    assert "actual_ts < '2026-11-18 00:00:00'" in sql  # today's live deletes untouched
+    assert "'rewrite-all', 'true'" in sql
+
+
+@pytest.mark.parametrize(
+    "table", ["bronze.trust_movement", "silver.movement_revisions", "gold.delay_hotspots"]
+)
+def test_only_merge_on_read_silver_rewrites_delete_files(table):
+    assert delete_cleanup_sql(policy_for(table), NOW) is None
+
+
+def test_new_measurements_become_typed_columns():
+    record = {"table_name": "x", "delete_files_before": 3, "duration_s": 1.5}
+    assert missing_columns(record, {"table_name", "duration_s"}) == [
+        ("delete_files_before", "BIGINT")
+    ]
 
 
 @pytest.mark.parametrize("table", ["silver.rejected_messages", "ref.locations"])

@@ -43,12 +43,19 @@ class TablePolicy:
     # Nothing streams from silver, so its old versions are only storage; keeping three days
     # of them filled the 145 GB disk on 2026-11-22 (findings F28).
     snapshot_retention: timedelta = timedelta(hours=12)
+    # Merge-on-read tables: after compaction, rewrite the compacted days' position delete files.
+    # Compaction leaves delete files whose data files it rewrote ("dangling"); every scan still
+    # indexes them all (2,900 per silver lookup before 2026-11-26, findings F35).
+    rewrite_deletes: bool = False
 
 
 POLICIES = [
     TablePolicy("bronze.trust_movement", "kafka_ts", 0, timedelta(days=3)),
     TablePolicy("silver.movement_revisions", "actual_ts", 0),
-    TablePolicy("silver.trust_movement", "actual_ts", 2),
+    # Everything before today (was: before the day before yesterday). Three uncompacted days held
+    # ~3,000 small data files and ~2,900 delete files that every MERGE paid for; compacting the
+    # live table up to yesterday had 0 failed groups (findings F35).
+    TablePolicy("silver.trust_movement", "actual_ts", 0, rewrite_deletes=True),
     TablePolicy("silver.rejected_messages", None, None),
     TablePolicy("ref.locations", None, None),
     # Every dbt build replaces the last 3 days' rows (ADR-018): small new files and delete
@@ -88,6 +95,19 @@ def compaction_sql(policy: TablePolicy, now: datetime) -> str | None:
     )
 
 
+def delete_cleanup_sql(policy: TablePolicy, now: datetime) -> str | None:
+    """Rewrite the compacted days' position delete files, dropping dangling ones."""
+    if not policy.rewrite_deletes or policy.compact_before_days is None:
+        return None
+    midnight = now.astimezone(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+    cutoff = midnight - timedelta(days=policy.compact_before_days)
+    return (
+        f"CALL {CATALOG}.system.rewrite_position_delete_files(table => '{policy.table}', "
+        f"where => \"{policy.partition_column} < '{cutoff:%Y-%m-%d %H:%M:%S}'\", "
+        "options => map('rewrite-all', 'true', 'partial-progress.enabled', 'true'))"
+    )
+
+
 def expire_sql(policy: TablePolicy, now: datetime) -> str:
     return (
         f"CALL {CATALOG}.system.expire_snapshots(table => '{policy.table}', "
@@ -108,11 +128,19 @@ def properties_sql(table: str) -> str:
 
 
 def table_stats(spark, table: str) -> dict:
-    files, size = spark.sql(
-        f"SELECT count(*), coalesce(sum(file_size_in_bytes), 0) FROM {table}.files"
+    # data_files counts every entry of the .files table, delete files included (kept for
+    # comparability with earlier runs); delete_files counts those alone (from 2026-11-26).
+    files, size, deletes = spark.sql(
+        f"SELECT count(*), coalesce(sum(file_size_in_bytes), 0), "
+        f"count_if(content <> 0) FROM {table}.files"
     ).first()
     snapshots = spark.sql(f"SELECT count(*) FROM {table}.snapshots").first()[0]
-    return {"data_files": int(files), "data_bytes": int(size), "snapshots": int(snapshots)}
+    return {
+        "data_files": int(files),
+        "data_bytes": int(size),
+        "snapshots": int(snapshots),
+        "delete_files": int(deletes),
+    }
 
 
 def maintain_table(spark, policy: TablePolicy, now: datetime | None = None) -> dict:
@@ -127,11 +155,17 @@ def maintain_table(spark, policy: TablePolicy, now: datetime | None = None) -> d
         **{f"{k}_before": v for k, v in before.items()},
         "rewritten_files": 0,
         "added_files": 0,
+        "rewritten_delete_files": 0,
+        "added_delete_files": 0,
     }
     if (sql := compaction_sql(policy, now)) is not None:
         row = spark.sql(sql).first()
         record["rewritten_files"] = int(row["rewritten_data_files_count"])
         record["added_files"] = int(row["added_data_files_count"])
+    if (sql := delete_cleanup_sql(policy, now)) is not None:
+        row = spark.sql(sql).first()
+        record["rewritten_delete_files"] = int(row["rewritten_delete_files_count"])
+        record["added_delete_files"] = int(row["added_delete_files_count"])
     row = spark.sql(expire_sql(policy, now)).first()
     record["expired_data_files"] = int(row["deleted_data_files_count"])
     record["orphans_removed"] = len(spark.sql(orphan_sql(policy, now)).collect())
@@ -140,11 +174,20 @@ def maintain_table(spark, policy: TablePolicy, now: datetime | None = None) -> d
     return record
 
 
+def missing_columns(record: dict, existing: set[str]) -> list[tuple[str, str]]:
+    """Columns a record has that the runs table lacks, with SQL types (new measurements)."""
+    types = {bool: "BOOLEAN", int: "BIGINT", float: "DOUBLE", str: "STRING"}
+    return [(k, types[type(v)]) for k, v in record.items() if k not in existing]
+
+
 def record_run(spark, record: dict, runs_table: str = RUNS_TABLE) -> None:
     """Append one measurement record to the runs table (created on first use)."""
     spark.sql(f"CREATE NAMESPACE IF NOT EXISTS {runs_table.split('.')[0]}")
     frame = spark.createDataFrame([record])
     if spark.catalog.tableExists(runs_table):
+        existing = {f.name for f in spark.table(runs_table).schema.fields}
+        for name, sql_type in missing_columns(record, existing):
+            spark.sql(f"ALTER TABLE {runs_table} ADD COLUMN {name} {sql_type}")
         frame.writeTo(runs_table).append()
     else:
         frame.writeTo(runs_table).using("iceberg").create()
