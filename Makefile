@@ -26,8 +26,8 @@ tunnel:  ## Open the cloud UIs on localhost: Console 8085, Spark 4040/4041, Airf
 	uv run python scripts/tunnel.py
 
 # Q reaches the script as an environment variable, so no shell re-parses * or quotes in the SQL.
-export Q
-sql:  ## Query the cloud tables: make sql Q="SELECT count(*) FROM silver.trust_movement"
+export Q SQL_ROWS
+sql:  ## Query the cloud tables: make sql Q="SELECT ..." (SQL_ROWS=200 for more rows)
 	uv run python scripts/cloud_sql.py
 
 attribution-check:  ## Pattern check of gold vs official delay attribution (file in data/reference/)

@@ -31,9 +31,15 @@ def main() -> None:
     if not host:
         sys.exit("Set CORE_HOST=ubuntu@<processing-vm-public-ip> in .env")
     key = Path(env.get("CAPTURE_SSH_KEY", Path.home() / ".ssh" / "railstream_oci")).expanduser()
+    rows = os.environ.get("SQL_ROWS", "50")  # rows printed per statement
+    if not rows.isdigit():
+        sys.exit("SQL_ROWS must be a number")
+    remote = REMOTE.replace(
+        "-e SPARK_DRIVER_MEMORY=768m", f"-e SPARK_DRIVER_MEMORY=768m -e SQL_ROWS={rows}"
+    )
     print("running on the cloud VM (Spark starts in ~15 s)...", flush=True)
     result = subprocess.run(
-        ["ssh", "-i", str(key), host, REMOTE], input=query, text=True, capture_output=True
+        ["ssh", "-i", str(key), host, remote], input=query, text=True, capture_output=True
     )
     noise = ("WARN", "SLF4J", "log4j", "setLogLevel", "Ivy")
     for line in result.stdout.splitlines():
