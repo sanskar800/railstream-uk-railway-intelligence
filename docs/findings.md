@@ -444,3 +444,25 @@ Every check was run against the data, not by reading code.
 - **Silver slowing (found 2026-11-26, open):** median batch time per hour in quiet evening hours rose from 14-16 s (24 Nov) to 26-28 s (25 Nov); during busy daytime hours (gold builds, backfills, audit queries on the same 2 CPUs) 32-54 s with peaks over 400 s, and 174 s while catching up after today's backfill. Batches longer than the 1-minute trigger make silver fall behind. To investigate before Day 11.
 - A side effect seen: the final build after the backfill failed `assert_hotspots_reconcile_with_delay_changes` (31/32). The test cuts off at the newest receive time gold saw, assuming silver commits within about a minute; with silver minutes behind, messages received before the cutoff were committed during the 20-minute build. The next scheduled build, with silver caught up (batches ~30 s, ~1,450 rows), passed 32/32. The test therefore also fails when silver lags.
 
+## F35. Silver slowed because three uncompacted days of delete files were indexed by every MERGE (2026-11-26)
+
+Median batch time in quiet evening hours rose from 14-16 s (24 Nov) to 26-28 s (25 Nov); busy hours reached 174 s per batch. Measured step by step:
+
+1. **Spark job times** (silver's monitoring API, 145 min): `localCheckpoint` (the materialized current-call candidates, before the MERGE) 48 % of wall time, median 75 s; the MERGE statements 36 %.
+2. **Scan metrics** for one 752-row batch: the revisions MERGE read **3,909,696 rows / 720 files / 396 MB**; the current-call lookup skipped 3,647 files but indexed **2,900 position delete files**.
+3. **Per-phase timing** added to silver's log (each batch): typical batch 15-45 s, of which current MERGE 9-30 s (~65 %), revisions 2-8 s, read and classify 1-5 s. One batch whose actual times reached back to 21 Nov: revisions 39 s, current **188 s**.
+
+**First hypothesis, partly wrong.** A batch is the last minute plus a few late reports, and one old report stretched the single min..max prune range over days. Fix: prune with clustered ranges (a new range after a gap over 1 hour, at most 40), keeping the guarantee that every batch value lies inside a range (unit property test). The silver integration scenarios first failed: `merge_new` prefixed the predicate with `t.`, invalid once it became a bracketed OR (fixed before deploying; both scenarios then passed, 6 min). Result: wide-range batches improved (a catch-up batch spanning 2 days: current 86 s), but typical batches did not (current median ~17.5 s vs ~18 s); a batch with one 13-minute range still spent 10.3 s in the current MERGE.
+
+**The cause.** Files per day partition of `silver.trust_movement`: 26 Nov 565 data / 312 delete files; 25 Nov 1,532 / 1,032; 24 Nov 1,616 / 1,055; 23 Nov 26 / 511 (compacted, but its delete files remained: "dangling", pointing at rewritten data); older days 7-16 / 2-7. 312 + 1,032 + 1,055 + 511 = **2,910 = the delete files every lookup indexed**, however narrow its range. Maintenance compacted only days before the day before yesterday, so three days accumulated, ~1,000 delete files a day.
+
+**Experiment on the live table** (same path as the nightly job): compacting 23-25 Nov rewrote 2 + 1,616 + 1,532 data files into 1 per day with **0 failed groups**; `remove-dangling-deletes` failed ("current snapshot changed": it needs no concurrent commit, so it cannot run beside silver), but `rewrite_position_delete_files` then rewrote **2,599 delete files and added 0** (all dangling). Afterwards 23-25 Nov held 1 data file and 0 delete files each. Current MERGE on single-range batches: median **~17 s -> ~12.6 s** (9.8, 9.8, 12.6, 15.3, 15.4).
+
+**Remaining cost, explained:** ~10 s floor (today's own small files, ~60 more an hour, plus the MERGE); +5-20 s when a batch includes genuine late reports from older days (route counts unchanged before and after, 2-17 late per batch: normal feed behaviour), each needing that day's compacted file. Silver keeps up: 15-40 s per batch against the 60 s trigger.
+
+**Fix:** nightly maintenance compacts silver current calls up to yesterday (was: up to the day before yesterday), then rewrites the compacted days' position delete files (dangling ones dropped). Maintenance records delete files before and after; `data_files` in `ops.maintenance_runs` has always counted delete files too.
+
+- Deployed 2026-11-26 13:40: Airflow image rebuilt, `verify-deploy` ok on all containers, maintenance integration scenario passed; a real `ref.locations` run added the four new columns to `ops.maintenance_runs` (older rows null). The first nightly run with the new policy is on 27 Nov 03:00.
+- Lesson: measure the phases first; a plausible cause (wide ranges) explained the outliers, not the typical batch.
+- Evidence: Spark monitoring API (jobs, SQL scan metrics), silver's per-batch timing log lines (batches 7285-7338), `.files` metadata queries, compaction outputs, 2026-11-26 12:00-13:30 UTC.
+
