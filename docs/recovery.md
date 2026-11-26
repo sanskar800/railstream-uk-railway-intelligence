@@ -6,6 +6,10 @@ approval; the handover review did not perform a recovery on live data.
 
 ## Capture restart
 
+**Outages over 5 minutes lose data.** The broker holds messages for a disconnected durable subscriber for 300 s only (the bridge logs `DATA GAP: … messages older than 300s expired`; measured redelivery delay up to 302 s). TRUST cannot be replayed, so whatever expires is gone. Keep planned bridge restarts under 4 minutes; the feed-stale alarm fires after 3-4 minutes (ADR-014). Known gap: 2026-11-26 13:38:15-13:42:16 UTC (~2,800 messages), caused by a deliberate 9-minute test (findings F36).
+
+**Storage outage (SeaweedFS down):** nothing to do while it lasts. Kafka keeps receiving (7-day retention); bronze and silver fail, Docker restarts them, and they resume from their checkpoints once storage is back. Tested 2026-11-26 (F36).
+
 The capture directory must have a single writer. Before compressing closed
 hours, reopening the current hour or reading the last receive time, the bridge
 checks the plain JSONL file:

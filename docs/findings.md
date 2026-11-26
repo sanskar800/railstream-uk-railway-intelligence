@@ -466,3 +466,19 @@ Median batch time in quiet evening hours rose from 14-16 s (24 Nov) to 26-28 s (
 - Lesson: measure the phases first; a plausible cause (wide ranges) explained the outliers, not the typical batch.
 - Evidence: Spark monitoring API (jobs, SQL scan metrics), silver's per-batch timing log lines (batches 7285-7338), `.files` metadata queries, compaction outputs, 2026-11-26 12:00-13:30 UTC.
 
+## F36. Failure tests (Day 11): storage outage loses nothing, a capture outage over 5 minutes does, and the feed alarm needed fixing (2026-11-26)
+
+Task 11.3, run against the live system.
+
+| Scenario | How | Result |
+|---|---|---|
+| Malformed message -> DLQ | `test_silver_corrections_replay_and_reject_retry` (passed 2026-11-26) | rejected once into `rejected_messages` and the DLQ topic, also when the batch is retried |
+| Very late events | `test_silver_watermark_and_locations` (passed 2026-11-26) | late events take the `late` route; a future-dated message cannot advance the watermark |
+| Storage down | SeaweedFS stopped 13:59:22-14:04:33 | bronze failed ("Failed to close current writer") and silver too; Docker restarted both; Kafka kept receiving. Within a minute of storage returning bronze took the backlog (3,692 rows in one batch) and silver resumed the same query from its checkpoint. **Bronze 2,372 + 2,510 + 2,245 = 7,127 messages received 13:55-14:05 = archive 7,127; 0 offset holes or duplicates; silver 388,228 rows = 388,228 event keys today.** No alert (expected: the feed is healthy; see open points) |
+| Feed disconnect, 9 min | bridge stopped 13:38:15-13:47:16 | reconnected by itself; bridge logged `DATA GAP: disconnected 544s … messages older than 300s expired`. By TRUST send time: 13:39-13:41 **0 messages**, 13:38 183 and 13:42 512 of ~700: **~2,800 messages lost** (13:38:15-13:42:16); 2,851 redelivered, up to 302 s late. **No alarm fired** |
+| Feed disconnect, 4 min (after the alarm fix) | bridge stopped 14:09:58-14:13:58 | `reconnected after 244s; queued messages will be redelivered`, no gap warning; by send time every minute present (703-728 per minute 14:10-14:13), 2,213 messages redelivered up to 245 s late. **FIRING and OK emails received** |
+
+- **The broker holds messages for 5 minutes, then discards them.** Any capture outage longer than that loses data that cannot be replayed. I stopped the bridge for 9 minutes having assumed the durable subscription kept everything, without checking the limit the bridge code already warns about: the lost window is a gap caused by the test. The capture VM is the system's real single point of failure; its alarm has to fire inside those 5 minutes.
+- **Why the alarm did not fire:** Oracle's 1-minute series of `feed_age_seconds` read 288, 348, 466, *(no point at 13:47)*, 528: the publisher's start drifts by seconds, so one window got two samples and the next none, which reset the 3-minute pending count; and 300 s + 3 min meant ~8 minutes to alert, after data loss starts. Now `feed_age_seconds[2m].max() > 120`, trigger delay 1 minute (ADR-014 update), proven by the 4-minute test.
+- **Open:** a storage or Spark outage raises no alert (the feed stays fresh) and gold failures email nobody (F32). A pipeline-lag metric (silver's newest received_at vs now) with an alarm closes both; planned for Day 12 (observability).
+- Evidence: bridge logs, archive counts by TRUST send time (`msg_queue_timestamp`), `feed_age_seconds` journal and Oracle's metric data, Kafka high-water marks, bronze offset and window counts, 2026-11-26 13:38-14:20 UTC.
