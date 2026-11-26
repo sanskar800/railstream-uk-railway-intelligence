@@ -19,7 +19,7 @@ from pyspark import StorageLevel
 from pyspark.sql import functions as F
 from pyspark.sql.window import Window
 
-from streaming.bounds import BatchBounds, between, match_predicate
+from streaming.bounds import BatchBounds, actual_predicate, clustered_ranges, match_predicate
 from streaming.bronze import ProgressLogger
 from streaming.schemas import CLASSIFIED_SCHEMA, MOVEMENT_SCHEMA
 from streaming.session import build_session
@@ -76,13 +76,18 @@ def create_tables(spark, namespace):
 
 
 def batch_bounds(movements) -> BatchBounds:
-    row = movements.agg(
-        F.min("actual_ts").alias("amin"),
-        F.max("actual_ts").alias("amax"),
-        F.min("planned_ts").alias("pmin"),
-        F.max("planned_ts").alias("pmax"),
-    ).first()
-    return BatchBounds(row["amin"], row["amax"], row["pmin"], row["pmax"])
+    """Min/max and clustered ranges of the batch's times (distinct values: at most a few
+    thousand minutes even in a 200k-row catch-up batch)."""
+    pairs = movements.select("actual_ts", "planned_ts").distinct().collect()
+    actual = [r["actual_ts"] for r in pairs]
+    planned = [r["planned_ts"] for r in pairs if r["planned_ts"] is not None]
+    unresolved = [r["actual_ts"] for r in pairs if r["planned_ts"] is None]
+    return BatchBounds(
+        min(actual), max(actual), min(planned, default=None), max(planned, default=None),
+        actual_ranges=clustered_ranges(actual),
+        planned_ranges=clustered_ranges(planned),
+        unresolved_ranges=clustered_ranges(unresolved),
+    )  # fmt: skip
 
 
 def merge_new(spark, frame, table, key, prune: str | None = None):
@@ -204,7 +209,7 @@ def process_classified_batch(
             bounds = batch_bounds(movements)
             lap("bounds")
             # A revision's id covers its whole body: an identical one has the same actual time.
-            revisions_window = between("actual_ts", bounds.actual_min, bounds.actual_max)
+            revisions_window = actual_predicate(bounds)
             merge_new(
                 spark, movements, f"{namespace}.movement_revisions", "revision_id",
                 prune=revisions_window,
@@ -227,8 +232,8 @@ def process_classified_batch(
         log.info("batch %s: %s", batch_id, counts)
         if counts.get("movement"):
             log.info(
-                "batch %s timing %s; actual %s..%s",
-                batch_id, timing, bounds.actual_min, bounds.actual_max,
+                "batch %s timing %s; actual %s..%s in %d ranges",
+                batch_id, timing, bounds.actual_min, bounds.actual_max, len(bounds.actual_ranges),
             )  # fmt: skip
         if "_route" in classified.columns:
             log.info(
