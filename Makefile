@@ -4,7 +4,7 @@
 # .env is optional for the local stack: every variable it can set has a local default.
 COMPOSE = docker compose $(if $(wildcard .env),--env-file .env,) -f infra/compose/compose.yaml
 
-.PHONY: attribution-check gold-backfill help setup test it tunnel sql dbt dbt-docs lint format replay topics schemas stream stream-logs silver silver-logs load-corpus airflow airflow-logs pull-raw up down ps logs tools stats
+.PHONY: verify-deploy attribution-check gold-backfill help setup test it tunnel sql dbt dbt-docs lint format replay topics schemas stream stream-logs silver silver-logs load-corpus airflow airflow-logs pull-raw up down ps logs tools stats
 
 help:  ## List targets
 	@uv run python -c "import re; [print(f\"{m[0]:<12} {m[1]}\") for m in re.findall(r\"^([a-z-]+):.*## (.*)$$\", open(\"Makefile\").read(), re.M)]"
@@ -91,6 +91,9 @@ gold-backfill:  ## Rebuild gold history in 7-day chunks (on the VM): make gold-b
 	  $(MAKE) --no-print-directory dbt ARGS='run --vars {"rebuild_from":"'$$d'","rebuild_to":"'$$n'"}' || exit 1; \
 	  d=$$n; \
 	done
+
+verify-deploy:  ## On a VM: check the code in each running container matches this checkout
+	bash scripts/verify_deploy.sh
 
 dbt-docs:  ## Generate the dbt docs site on the cloud VM and save it to data/dbt-docs/index.html
 	uv run python scripts/dbt_docs.py
