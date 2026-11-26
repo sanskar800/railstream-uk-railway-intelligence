@@ -324,3 +324,11 @@ The dbt project is `transform/` (ADR-017). dbt runs in the Airflow image's own e
 - Results are Iceberg tables `lake.gold.punctuality_hourly` and `lake.gold.delay_hotspots`, readable by any engine: `make sql Q="SELECT * FROM gold.punctuality_hourly LIMIT 10"`.
 - DuckDB reads and writes storage with the scoped `dbt` SeaweedFS identity (`DBT_S3_ACCESS_KEY`/`DBT_S3_SECRET_KEY` in `.env`; local defaults in Compose), because it cannot use Lakekeeper's remote signing. dbt state (seed, compiled SQL, logs) lives on the Airflow volume under `/opt/airflow/dbt`.
 - Gold is rebuilt every 15 minutes by the Airflow DAG `build_gold` (silver freshness check, then `dbt build`). `make dbt-docs` generates the dbt docs site on the VM and saves it to `data/dbt-docs/index.html` (lineage graph, models, columns, tests); open it in a browser.
+
+## 11. Deploying code changes
+
+The images copy their code at build time; only `orchestration/dags/` and `transform/` are mounted. After `git pull` on a VM:
+
+- `orchestration/` (except DAGs) or `trust/` changed: `make airflow` (rebuilds the Airflow image).
+- `streaming/`, `trust/`, `ingest/` or `contracts/` changed: rebuild the Spark images (`make stream`, `make silver`, and `make airflow` for Spark Connect).
+- Then `make verify-deploy`: compares every Python and JSON file in each running container with the checkout and exits 1 if any differ. A stale Airflow image ran two-day-old maintenance code unnoticed (findings F34).

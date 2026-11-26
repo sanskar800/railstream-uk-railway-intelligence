@@ -377,7 +377,7 @@ From 04:45 UTC on 24 Nov every scheduled gold build failed (45 runs; last succes
 
 - **Deploying found a Day 9 bug:** `--full-refresh` had never worked on an existing table: DuckDB-Iceberg refuses to re-create a table dropped in the same transaction ("Not implemented"). The transaction rolled back, so nothing was lost; the materialization now commits the drop first. Gold history then rebuilt with `make gold-backfill FROM=2026-10-30`: 4 chunks, **236 s**, no errors.
 - A manual run collided with a scheduled build on dbt's DuckDB file lock ("Could not set lock"): pausing a DAG does not stop a run already started. The lock prevented two writers, as it should.
-- **Stability after ADR-018:** 70 scheduled builds from 24 Nov 16:45 to 25 Nov 11:00, **all successful**, 32/32 tests each; median 163 s, max 284 s (morning peak, CPU shared with silver). Builds just before the 03:00 compaction (most delete files) took ~150 s: delete-file growth within a day is not a problem. No OOM; disk 20 %.
+- **Stability after ADR-018:** 70 scheduled builds from 24 Nov 16:45 to 25 Nov 11:00, **all successful**, 32/32 tests each; median 163 s, max 284 s (morning peak, CPU shared with silver). Builds just before 03:00 took ~150 s. **Correction (F34):** no nightly gold compaction had happened yet, because the Airflow image was stale; those builds ran ~11 hours after the one-off manual compaction, so they show 11 hours of delete-file growth is harmless, not that the nightly compaction works. It first ran on 26 Nov (F34). No OOM; disk 20 %.
 
 **Attribution pattern check re-run** (same P05 file, same 6-19 Nov window; `results/dev/2026-11-25-attribution-check-late-starts/`, before: `2026-11-23-…`):
 
@@ -408,3 +408,36 @@ From 04:45 UTC on 24 Nov every scheduled gold build failed (45 runs; last succes
 | Top-100 locations, min per day | 31,264 | 42,275 | 20,322 | 29,472 |
 
   The reactionary ranking is unchanged (it already used 3+ minutes); its *share* rose because the denominator lost the rounding noise. Volume moved from ~3x the official figure to 18 % under it. The remaining gap may be the 1-2-minute creep the threshold ignores by design, and the different season (summer vs. November); neither is tested.
+
+## F34. Full audit before Day 11: every layer reconciled; two non-determinism bugs and a stale image fixed (2026-11-25/26)
+
+Every check was run against the data, not by reading code.
+
+| Layer | Check | Result |
+|---|---|---|
+| Repo | lint, 169 unit tests, CI on every commit, no tracked secrets | Pass |
+| Capture | archive hours 5 Nov 14:00 - 25 Nov 11:00 | **478 of 478, 0 missing**, 0 unparseable frames |
+| Backup | Object Storage vs archive | in sync (477 matching, current hour pending) |
+| Kafka -> bronze | offsets per partition | **0 holes, 0 duplicate offsets**; bronze ~1 min behind the high watermark; DLQ empty |
+| Archive -> bronze | messages per UTC day | distinct bronze messages = archive **on every day: 15,292,596** |
+| Bronze -> silver | movement messages vs revisions, one day (18 Nov) | distinct payloads **828,254 = 828,254** revisions; no duplicate revision ids |
+| Silver | quality profile, 14.4 M rows | no null actual time, location or delay; 100 % location names; nothing in the future; 0.03 % revision conflicts |
+| Gold | **independent Spark recompute of 18 Nov** vs dbt/DuckDB | punctuality: 31 operators, arrivals, on-time and summed delay **identical**; hotspots and reactionary identical after the fixes below |
+| Operations | DAG history, timers, containers, disk | feed-age and autoheal timers running; all containers up; disk 20 % |
+
+**Explained, kept:**
+- **2,554 duplicate rows in bronze** (same message, same receive time, two offsets): 1,783 on 17 Nov 13:41:36-13:43:59 (migration cutover) and 771 on 23 Nov 14:15:01-14:15:58 (the F28 replay ran to 14:16, live data had resumed at 14:15:01). Each is one `live` and one `replay` copy. Bronze stays the untouched raw record; silver collapses them (revision ids are idempotent). Lesson: end a replay at the first live message's receive time, not at a rounded minute.
+- **62,442 fewer revisions than distinct movement messages:** the same message delivered twice by the broker with a different receive time (2,543 on 18 Nov alone); the revision id hashes event key, queue timestamp and body, so silver stores it once. 312,559 fewer current rows than revisions: corrected events (17,601 on 18 Nov).
+- The 1.288 % null planned time, unresolved identity and off-route are the same 185,521 off-route rows (excluded from gold).
+
+**Bugs found and fixed:**
+1. **Non-deterministic delay changes.** 42,892 report pairs per day share a train's actual and planned time; `lag()` ordered only by those two could pick either order, so the same silver could give different gold (Spark vs DuckDB: 26 of 125,978 minutes, 12 locations). Now a total order: arrival before departure, TRUST queue time, then `event_key`. Afterwards, Spark reading silver at the build's snapshot (Iceberg time travel) and gold: **125,998 = 125,998** gained, 76,537 recovered, 30,308 late starts, 3,046 locations, **0 differing**.
+2. **Primary train and its delay chosen by two separate `arg_min` calls**, which could pick different trains when two opened a cluster in the same minute. Now one ordered rule. Afterwards **9,937 clusters, 6,688 knock-on trains, 46,890 knock-on minutes, 77,914 primary minutes, 0 clusters differing**.
+3. **Stale Airflow image.** `orchestration/maintenance.py` is copied into the image; after the 23-24 Nov changes only `git pull` had run, so the container (built 23 Nov 15:53) still had no gold compaction: the 25 Nov run shows `rewritten_files = 0` for gold. Rebuilt 25 Nov 15:26; the 26 Nov run compacted punctuality 308 -> 4, hotspots 317 -> 5, reactionary 304 -> 4 files. The claim in F33 that this had already happened is corrected there. New `make verify-deploy` compares every file in each running container with the checkout (development.md §11).
+4. **Maintenance failure of 20 Nov** (not recorded before): Spark broadcast a join it judged small and ran out of driver memory, skipping every table that night. Broadcast joins are now disabled in maintenance sessions.
+
+**Open:**
+- **Implausible delays:** 32 reports with |delay| over 10 hours are feed artefacts: TRUST's `timetable_variation` stops at 999 (actual minus planned was 1,415 and 2,907 minutes), or a train matched to the next day's schedule (355T452Q21 ran 21 Nov against its 22 Nov plan, "999 minutes early"). One can add ~1,000 false minutes to a location. Early running is otherwise real (48,479 reports 30 min-2 h early, mostly freight). Proposal to decide: treat |delay| of 12 hours or more as a schedule mismatch and exclude those reports from delay metrics.
+- The capture bridge runs code from 17 Nov 13:36; the only later change removed an unused option and updated docstrings (behaviour identical). `verify-deploy` reports it stale until the bridge is rebuilt.
+- `silver.trust_movement` holds 5,843 files after compaction (the two uncompacted recent days); confirm it levels off.
+- Evidence: queries and command outputs in sessions 2026-11-25 11:35-15:30 and 2026-11-26 11:25-11:50 UTC; `ops.maintenance_runs`.

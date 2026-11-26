@@ -28,6 +28,6 @@ ADR-017 rebuilt every gold table in full each time: `DELETE` every row, then `IN
 ## Consequences
 
 - Measured after a one-off compaction (hotspots 1,199 files / 1.46 GB → 2 files / 11.2 MB): full `dbt build` **151 s, peak 1.56 GB, 31/31 tests**; `delay_hotspots` 21 s (was 246 s). First scheduled run 3.5 min.
-- Delete files still accumulate between nightly compactions (each build deletes 3 days of rows); the last builds before 03:00 are the worst case and are checked on 2026-11-25 (F32).
+- Delete files still accumulate between nightly compactions (each build deletes 3 days of rows); the last builds before 03:00 are the worst case and are checked on 2026-11-25 (F32). The nightly gold compaction first ran on 2026-11-26 (308 -> 4, 317 -> 5, 304 -> 4 files): until the Airflow image was rebuilt it ran old code (F34).
 - A correction to silver older than 3 days no longer reaches gold until a backfill covers that date. Late corrections that old are rare (silver's late-event handling, ADR-011).
 - Gold rows for a date older than the window keep the definition they were built with; after a metric change, run a backfill.
